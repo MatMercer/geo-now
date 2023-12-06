@@ -6,13 +6,6 @@ import (
 	"io"
 )
 
-type C byte
-type I1 uint8
-type I2 uint16
-type I4 uint32
-type R4 float32
-type R8 float64
-
 const (
 	LittleEndian = 0
 	BigEndian    = 1
@@ -30,205 +23,205 @@ type HMFile struct {
 	ObservationTimeInfo      ObservationTimeInformationBlock
 	ErrorInfo                ErrorInformationBlock
 	SpareInfo                SpareInformationBlock
-	ImageData                []I2
+	ImageData                []uint16
 }
 
 type Position struct {
-	X R8
-	Y R8
-	Z R8
+	X float64
+	Y float64
+	Z float64
 }
 
 type BasicInformation struct {
-	BlockNumber          I1
-	BlockLength          I2
-	TotalHeaderBlocks    I2
-	ByteOrder            I1
-	Satellite            [16]C
-	ProcessingCenter     [16]C
-	ObservationArea      [4]C
-	ObservationAreaInfo  [2]C
-	ObservationTimeline  I2
-	ObservationStartTime R8
-	ObservationEndTime   R8
-	FileCreationTime     R8
-	TotalHeaderLength    I4
-	TotalDataLength      I4
-	QualityFlag1         I1
-	QualityFlag2         I1
-	QualityFlag3         I1
-	QualityFlag4         I1
-	FileFormatVersion    [32]C
-	FileName             [128]C
-	Spare                [40]C
+	BlockNumber          uint8
+	BlockLength          uint16
+	TotalHeaderBlocks    uint16
+	ByteOrder            uint8
+	Satellite            [16]byte
+	ProcessingCenter     [16]byte
+	ObservationArea      [4]byte
+	ObservationAreaInfo  [2]byte
+	ObservationTimeline  uint16
+	ObservationStartTime float64
+	ObservationEndTime   float64
+	FileCreationTime     float64
+	TotalHeaderLength    uint32
+	TotalDataLength      uint32
+	QualityFlag1         uint8
+	QualityFlag2         uint8
+	QualityFlag3         uint8
+	QualityFlag4         uint8
+	FileFormatVersion    [32]byte
+	FileName             [128]byte
+	Spare                [40]byte
 }
 
 type DataInformationBlock struct {
-	BlockNumber          I1
-	BlockLength          I2
-	NumberOfBitsPerPixel I2
-	NumberOfColumns      I2
-	NumberOfLines        I2
-	CompressionFlag      I1
-	Spare                [40]C
+	BlockNumber          uint8
+	BlockLength          uint16
+	NumberOfBitsPerPixel uint16
+	NumberOfColumns      uint16
+	NumberOfLines        uint16
+	CompressionFlag      uint8
+	Spare                [40]byte
 }
 
 type ProjectionInformationBlock struct {
-	BlockNumber             I1
-	BlockLength             I2
-	SubLon                  R8
-	CFAC                    I4
-	LFAC                    I4
-	COFF                    R4
-	LOFF                    R4
-	DistanceFromEarthCenter R8
-	EarthEquatorialRadius   R8
-	EarthPolarRadius        R8
-	RatioDiff               R8
-	RatioPolar              R8
-	RatioEquatorial         R8
-	SDCoefficient           R8
-	ResamplingTypes         I2
-	ResamplingSize          I2
-	Spare                   [40]C
+	BlockNumber             uint8
+	BlockLength             uint16
+	SubLon                  float64
+	CFAC                    uint32
+	LFAC                    uint32
+	COFF                    float32
+	LOFF                    float32
+	DistanceFromEarthCenter float64
+	EarthEquatorialRadius   float64
+	EarthPolarRadius        float64
+	RatioDiff               float64
+	RatioPolar              float64
+	RatioEquatorial         float64
+	SDCoefficient           float64
+	ResamplingTypes         uint16
+	ResamplingSize          uint16
+	Spare                   [40]byte
 }
 
 type NavigationInformationBlock struct {
-	BlockNumber                  I1
-	BlockLength                  I2
-	NavigationTime               R8
-	SSPLongitude                 R8
-	SSPLatitude                  R8
-	DistanceFromEarthToSatellite R8
-	NadirLongitude               R8
-	NadirLatitude                R8
+	BlockNumber                  uint8
+	BlockLength                  uint16
+	NavigationTime               float64
+	SSPLongitude                 float64
+	SSPLatitude                  float64
+	DistanceFromEarthToSatellite float64
+	NadirLongitude               float64
+	NadirLatitude                float64
 	SunPosition                  Position
 	MoonPosition                 Position
-	Spare                        [40]C
+	Spare                        [40]byte
 }
 
 type CalibrationInformationBlock struct {
-	BlockNumber                       I1
-	BlockLength                       I2
-	BandNumber                        I2
-	CentralWaveLength                 R8
-	ValidNumberOfBitsPerPixel         I2
-	CountValueOfErrorPixels           I2
-	CountValueOfPixelsOutsideScanArea I2
-	SlopeForCountRadianceEq           R8
-	InterceptForCountRadianceEq       R8
+	BlockNumber                       uint8
+	BlockLength                       uint16
+	BandNumber                        uint16
+	CentralWaveLength                 float64
+	ValidNumberOfBitsPerPixel         uint16
+	CountValueOfErrorPixels           uint16
+	CountValueOfPixelsOutsideScanArea uint16
+	SlopeForCountRadianceEq           float64
+	InterceptForCountRadianceEq       float64
 	Infrared                          InfraredBand
 	Visible                           VisibleBand
 }
 
 type InfraredBand struct {
-	BrightnessTemp    R8
-	BrightnessC1      R8
-	BrightnessC2      R8
-	Radiance          R8
-	RadianceC1        R8
-	RadianceC2        R8
-	SpeedOfLight      R8
-	PlanckConstant    R8
-	BoltzmannConstant R8
-	Spare             [40]C
+	BrightnessTemp    float64
+	BrightnessC1      float64
+	BrightnessC2      float64
+	Radiance          float64
+	RadianceC1        float64
+	RadianceC2        float64
+	SpeedOfLight      float64
+	PlanckConstant    float64
+	BoltzmannConstant float64
+	Spare             [40]byte
 }
 
 type VisibleBand struct {
-	Albedo              R8
-	UpdateTime          R8
-	CalibratedSlope     R8
-	CalibratedIntercept R8
-	Spare               [80]C
+	Albedo              float64
+	UpdateTime          float64
+	CalibratedSlope     float64
+	CalibratedIntercept float64
+	Spare               [80]byte
 }
 
 type InterCalibrationInformationBlock struct {
-	BlockNumber                I1
-	BlockLength                I2
-	GSICSIntercept             R8
-	GSICSSlope                 R8
-	GSICSQuadratic             R8
-	RadianceBias               R8
-	RadianceUncertainty        R8
-	RadianceStandardScene      R8
-	GSICSCorrectionStart       R8
-	GSICSCorrectionEnd         R8
-	GSICSCalibrationUpperLimit R4
-	GSICSCalibrationLowerLimit R4
-	GSICSFileName              [128]C
-	Spare                      [56]C
+	BlockNumber                uint8
+	BlockLength                uint16
+	GSICSIntercept             float64
+	GSICSSlope                 float64
+	GSICSQuadratic             float64
+	RadianceBias               float64
+	RadianceUncertainty        float64
+	RadianceStandardScene      float64
+	GSICSCorrectionStart       float64
+	GSICSCorrectionEnd         float64
+	GSICSCalibrationUpperLimit float32
+	GSICSCalibrationLowerLimit float32
+	GSICSFileName              [128]byte
+	Spare                      [56]byte
 }
 
 type SegmentInformationBlock struct {
-	BlockNumber                   I1
-	BlockLength                   I2
-	SegmentTotalNumber            I1
-	SegmentSequenceNumber         I1
-	FirstLineNumberOfImageSegment I2
-	Spare                         [40]C
+	BlockNumber                   uint8
+	BlockLength                   uint16
+	SegmentTotalNumber            uint8
+	SegmentSequenceNumber         uint8
+	FirstLineNumberOfImageSegment uint16
+	Spare                         [40]byte
 }
 
 type NavigationCorrectionInformationBlock struct {
-	BlockNumber                  I1
-	BlockLength                  I2
-	CenterColumnOfRotation       R4
-	CenterLineOfRotation         R4
-	AmountOfRotationalCorrection R8
-	NumberOfCorrectionInfo       I2
+	BlockNumber                  uint8
+	BlockLength                  uint16
+	CenterColumnOfRotation       float32
+	CenterLineOfRotation         float32
+	AmountOfRotationalCorrection float64
+	NumberOfCorrectionInfo       uint16
 	Corrections                  []NavigationCorrection
-	Spare                        [40]C
+	Spare                        [40]byte
 }
 
 type NavigationCorrection struct {
-	LineNumberAfterRotation        I2
-	ShiftAmountForColumnCorrection R4
-	ShiftAmountForLineCorrection   R4
+	LineNumberAfterRotation        uint16
+	ShiftAmountForColumnCorrection float32
+	ShiftAmountForLineCorrection   float32
 }
 
 type ObservationTimeInformationBlock struct {
-	BlockNumber              I1
-	BlockLength              I2
-	NumberOfObservationTimes I2
+	BlockNumber              uint8
+	BlockLength              uint16
+	NumberOfObservationTimes uint16
 	Observations             []ObservationTime
-	Spare                    [40]C
+	Spare                    [40]byte
 }
 
 type ObservationTime struct {
-	LineNumber      I2
-	ObservationTime R8
+	LineNumber      uint16
+	ObservationTime float64
 }
 
 type ErrorInformationBlock struct {
-	BlockNumber    I1
-	BlockLength    I4
-	NumberOfErrors I2
+	BlockNumber    uint8
+	BlockLength    uint32
+	NumberOfErrors uint16
 	Errors         []ErrorInformation
-	Spare          [40]C
+	Spare          [40]byte
 }
 
 type ErrorInformation struct {
-	LineNumber     I2
-	NumberOfPixels I2
+	LineNumber     uint16
+	NumberOfPixels uint16
 }
 
 type SpareInformationBlock struct {
-	BlockNumber I1
-	BlockLength I2
-	Spare       [256]C
+	BlockNumber uint8
+	BlockLength uint16
+	Spare       [256]byte
 }
 
-func DecodeFile(f io.Reader) (*HMFile, error) {
+func DecodeFile(r io.Reader) (*HMFile, error) {
 	// Decode basic info
-	// I1+I2+I2=5
+	// uint8+uint16+uint16=5
 	basicInfo := make([]byte, 5)
-	_, err := f.Read(basicInfo)
+	_, err := r.Read(basicInfo)
 	if err != nil {
 		return nil, err
 	}
 	basicBuffer := bytes.NewBuffer(basicInfo)
 	i := BasicInformation{}
 	// Detect byte order
-	read(f, binary.BigEndian, &i.ByteOrder)
+	read(r, binary.BigEndian, &i.ByteOrder)
 	var o binary.ByteOrder
 	if i.ByteOrder == LittleEndian {
 		o = binary.LittleEndian
@@ -241,172 +234,172 @@ func DecodeFile(f io.Reader) (*HMFile, error) {
 	read(basicBuffer, o, &i.TotalHeaderBlocks)
 
 	// Skip Byte order because already read and continue normal decoding
-	read(f, o, &i.Satellite)
-	read(f, o, &i.ProcessingCenter)
-	read(f, o, &i.ObservationArea)
-	read(f, o, &i.ObservationAreaInfo)
-	read(f, o, &i.ObservationTimeline)
-	read(f, o, &i.ObservationStartTime)
-	read(f, o, &i.ObservationEndTime)
-	read(f, o, &i.FileCreationTime)
-	read(f, o, &i.TotalHeaderLength)
-	read(f, o, &i.TotalDataLength)
-	read(f, o, &i.QualityFlag1)
-	read(f, o, &i.QualityFlag2)
-	read(f, o, &i.QualityFlag3)
-	read(f, o, &i.QualityFlag4)
-	read(f, o, &i.FileFormatVersion)
-	read(f, o, &i.FileName)
-	read(f, o, &i.Spare)
+	read(r, o, &i.Satellite)
+	read(r, o, &i.ProcessingCenter)
+	read(r, o, &i.ObservationArea)
+	read(r, o, &i.ObservationAreaInfo)
+	read(r, o, &i.ObservationTimeline)
+	read(r, o, &i.ObservationStartTime)
+	read(r, o, &i.ObservationEndTime)
+	read(r, o, &i.FileCreationTime)
+	read(r, o, &i.TotalHeaderLength)
+	read(r, o, &i.TotalDataLength)
+	read(r, o, &i.QualityFlag1)
+	read(r, o, &i.QualityFlag2)
+	read(r, o, &i.QualityFlag3)
+	read(r, o, &i.QualityFlag4)
+	read(r, o, &i.FileFormatVersion)
+	read(r, o, &i.FileName)
+	read(r, o, &i.Spare)
 
 	// Decode data information block
 	d := DataInformationBlock{}
-	read(f, o, &d.BlockNumber)
-	read(f, o, &d.BlockLength)
-	read(f, o, &d.NumberOfBitsPerPixel)
-	read(f, o, &d.NumberOfColumns)
-	read(f, o, &d.NumberOfLines)
-	read(f, o, &d.CompressionFlag)
-	read(f, o, &d.Spare)
+	read(r, o, &d.BlockNumber)
+	read(r, o, &d.BlockLength)
+	read(r, o, &d.NumberOfBitsPerPixel)
+	read(r, o, &d.NumberOfColumns)
+	read(r, o, &d.NumberOfLines)
+	read(r, o, &d.CompressionFlag)
+	read(r, o, &d.Spare)
 
 	// Decode projection information block
 	p := ProjectionInformationBlock{}
-	read(f, o, &p.BlockNumber)
-	read(f, o, &p.BlockLength)
-	read(f, o, &p.SubLon)
-	read(f, o, &p.CFAC)
-	read(f, o, &p.LFAC)
-	read(f, o, &p.COFF)
-	read(f, o, &p.LOFF)
-	read(f, o, &p.DistanceFromEarthCenter)
-	read(f, o, &p.EarthEquatorialRadius)
-	read(f, o, &p.EarthPolarRadius)
-	read(f, o, &p.RatioDiff)
-	read(f, o, &p.RatioPolar)
-	read(f, o, &p.RatioEquatorial)
-	read(f, o, &p.SDCoefficient)
-	read(f, o, &p.ResamplingTypes)
-	read(f, o, &p.ResamplingSize)
-	read(f, o, &d.Spare)
+	read(r, o, &p.BlockNumber)
+	read(r, o, &p.BlockLength)
+	read(r, o, &p.SubLon)
+	read(r, o, &p.CFAC)
+	read(r, o, &p.LFAC)
+	read(r, o, &p.COFF)
+	read(r, o, &p.LOFF)
+	read(r, o, &p.DistanceFromEarthCenter)
+	read(r, o, &p.EarthEquatorialRadius)
+	read(r, o, &p.EarthPolarRadius)
+	read(r, o, &p.RatioDiff)
+	read(r, o, &p.RatioPolar)
+	read(r, o, &p.RatioEquatorial)
+	read(r, o, &p.SDCoefficient)
+	read(r, o, &p.ResamplingTypes)
+	read(r, o, &p.ResamplingSize)
+	read(r, o, &d.Spare)
 
 	// Decode navigation information block
 	n := NavigationInformationBlock{}
-	read(f, o, &n.BlockNumber)
-	read(f, o, &n.BlockLength)
-	read(f, o, &n.NavigationTime)
-	read(f, o, &n.SSPLongitude)
-	read(f, o, &n.SSPLatitude)
-	read(f, o, &n.DistanceFromEarthToSatellite)
-	read(f, o, &n.NadirLongitude)
-	read(f, o, &n.NadirLatitude)
-	read(f, o, &n.SunPosition.X)
-	read(f, o, &n.SunPosition.Y)
-	read(f, o, &n.SunPosition.Z)
-	read(f, o, &n.MoonPosition.X)
-	read(f, o, &n.MoonPosition.Y)
-	read(f, o, &n.MoonPosition.Z)
-	read(f, o, &n.Spare)
+	read(r, o, &n.BlockNumber)
+	read(r, o, &n.BlockLength)
+	read(r, o, &n.NavigationTime)
+	read(r, o, &n.SSPLongitude)
+	read(r, o, &n.SSPLatitude)
+	read(r, o, &n.DistanceFromEarthToSatellite)
+	read(r, o, &n.NadirLongitude)
+	read(r, o, &n.NadirLatitude)
+	read(r, o, &n.SunPosition.X)
+	read(r, o, &n.SunPosition.Y)
+	read(r, o, &n.SunPosition.Z)
+	read(r, o, &n.MoonPosition.X)
+	read(r, o, &n.MoonPosition.Y)
+	read(r, o, &n.MoonPosition.Z)
+	read(r, o, &n.Spare)
 
 	// Decode calibration info block
 	c := CalibrationInformationBlock{}
-	read(f, o, &c.BlockNumber)
-	read(f, o, &c.BlockLength)
-	read(f, o, &c.BandNumber)
-	read(f, o, &c.CentralWaveLength)
-	read(f, o, &c.ValidNumberOfBitsPerPixel)
-	read(f, o, &c.CountValueOfErrorPixels)
-	read(f, o, &c.CountValueOfPixelsOutsideScanArea)
-	read(f, o, &c.SlopeForCountRadianceEq)
-	read(f, o, &c.InterceptForCountRadianceEq)
+	read(r, o, &c.BlockNumber)
+	read(r, o, &c.BlockLength)
+	read(r, o, &c.BandNumber)
+	read(r, o, &c.CentralWaveLength)
+	read(r, o, &c.ValidNumberOfBitsPerPixel)
+	read(r, o, &c.CountValueOfErrorPixels)
+	read(r, o, &c.CountValueOfPixelsOutsideScanArea)
+	read(r, o, &c.SlopeForCountRadianceEq)
+	read(r, o, &c.InterceptForCountRadianceEq)
 	// Visible light
 	if c.BandNumber < 7 {
-		read(f, o, &c.Visible.Albedo)
-		read(f, o, &c.Visible.UpdateTime)
-		read(f, o, &c.Visible.CalibratedSlope)
-		read(f, o, &c.Visible.CalibratedIntercept)
-		read(f, o, &c.Visible.Spare)
+		read(r, o, &c.Visible.Albedo)
+		read(r, o, &c.Visible.UpdateTime)
+		read(r, o, &c.Visible.CalibratedSlope)
+		read(r, o, &c.Visible.CalibratedIntercept)
+		read(r, o, &c.Visible.Spare)
 	} else {
 		// TODO: infrared, 112 means what is the end of the block
-		read(f, o, make([]byte, 112))
+		read(r, o, make([]byte, 112))
 	}
 
 	// Decode inter calibration info block
 	ci := InterCalibrationInformationBlock{}
-	read(f, o, &ci.BlockNumber)
-	read(f, o, &ci.BlockLength)
-	read(f, o, &ci.GSICSIntercept)
-	read(f, o, &ci.GSICSSlope)
-	read(f, o, &ci.GSICSQuadratic)
-	read(f, o, &ci.RadianceBias)
-	read(f, o, &ci.RadianceUncertainty)
-	read(f, o, &ci.RadianceStandardScene)
-	read(f, o, &ci.GSICSCorrectionStart)
-	read(f, o, &ci.GSICSCorrectionEnd)
-	read(f, o, &ci.GSICSCalibrationUpperLimit)
-	read(f, o, &ci.GSICSCalibrationLowerLimit)
-	read(f, o, &ci.GSICSFileName)
-	read(f, o, &ci.Spare)
+	read(r, o, &ci.BlockNumber)
+	read(r, o, &ci.BlockLength)
+	read(r, o, &ci.GSICSIntercept)
+	read(r, o, &ci.GSICSSlope)
+	read(r, o, &ci.GSICSQuadratic)
+	read(r, o, &ci.RadianceBias)
+	read(r, o, &ci.RadianceUncertainty)
+	read(r, o, &ci.RadianceStandardScene)
+	read(r, o, &ci.GSICSCorrectionStart)
+	read(r, o, &ci.GSICSCorrectionEnd)
+	read(r, o, &ci.GSICSCalibrationUpperLimit)
+	read(r, o, &ci.GSICSCalibrationLowerLimit)
+	read(r, o, &ci.GSICSFileName)
+	read(r, o, &ci.Spare)
 
 	// Decode segment info block
 	s := SegmentInformationBlock{}
-	read(f, o, &s.BlockNumber)
-	read(f, o, &s.BlockLength)
-	read(f, o, &s.SegmentTotalNumber)
-	read(f, o, &s.SegmentSequenceNumber)
-	read(f, o, &s.FirstLineNumberOfImageSegment)
-	read(f, o, &s.Spare)
+	read(r, o, &s.BlockNumber)
+	read(r, o, &s.BlockLength)
+	read(r, o, &s.SegmentTotalNumber)
+	read(r, o, &s.SegmentSequenceNumber)
+	read(r, o, &s.FirstLineNumberOfImageSegment)
+	read(r, o, &s.Spare)
 
 	// Decode navigation correction block
 	nc := NavigationCorrectionInformationBlock{}
-	read(f, o, &nc.BlockNumber)
-	read(f, o, &nc.BlockLength)
-	read(f, o, &nc.CenterColumnOfRotation)
-	read(f, o, &nc.CenterLineOfRotation)
-	read(f, o, &nc.AmountOfRotationalCorrection)
-	read(f, o, &nc.NumberOfCorrectionInfo)
+	read(r, o, &nc.BlockNumber)
+	read(r, o, &nc.BlockLength)
+	read(r, o, &nc.CenterColumnOfRotation)
+	read(r, o, &nc.CenterLineOfRotation)
+	read(r, o, &nc.AmountOfRotationalCorrection)
+	read(r, o, &nc.NumberOfCorrectionInfo)
 	nc.Corrections = make([]NavigationCorrection, nc.NumberOfCorrectionInfo)
-	for i := I2(0); i < nc.NumberOfCorrectionInfo; i++ {
+	for i := uint16(0); i < nc.NumberOfCorrectionInfo; i++ {
 		correct := NavigationCorrection{}
-		read(f, o, &correct.LineNumberAfterRotation)
-		read(f, o, &correct.ShiftAmountForColumnCorrection)
-		read(f, o, &correct.ShiftAmountForLineCorrection)
+		read(r, o, &correct.LineNumberAfterRotation)
+		read(r, o, &correct.ShiftAmountForColumnCorrection)
+		read(r, o, &correct.ShiftAmountForLineCorrection)
 		nc.Corrections[i] = correct
 	}
-	read(f, o, &nc.Spare)
+	read(r, o, &nc.Spare)
 
 	// Decode observation time block
 	ob := ObservationTimeInformationBlock{}
-	read(f, o, &ob.BlockNumber)
-	read(f, o, &ob.BlockLength)
-	read(f, o, &ob.NumberOfObservationTimes)
+	read(r, o, &ob.BlockNumber)
+	read(r, o, &ob.BlockLength)
+	read(r, o, &ob.NumberOfObservationTimes)
 	ob.Observations = make([]ObservationTime, ob.NumberOfObservationTimes)
-	for i := I2(0); i < ob.NumberOfObservationTimes; i++ {
+	for i := uint16(0); i < ob.NumberOfObservationTimes; i++ {
 		observation := ObservationTime{}
-		read(f, o, &observation.LineNumber)
-		read(f, o, &observation.ObservationTime)
+		read(r, o, &observation.LineNumber)
+		read(r, o, &observation.ObservationTime)
 		ob.Observations[i] = observation
 	}
-	read(f, o, &ob.Spare)
+	read(r, o, &ob.Spare)
 
 	// Decode error information block
 	ei := ErrorInformationBlock{}
-	read(f, o, &ei.BlockNumber)
-	read(f, o, &ei.BlockLength)
-	read(f, o, &ei.NumberOfErrors)
+	read(r, o, &ei.BlockNumber)
+	read(r, o, &ei.BlockLength)
+	read(r, o, &ei.NumberOfErrors)
 	ei.Errors = make([]ErrorInformation, ei.NumberOfErrors)
-	for i := I2(0); i < ei.NumberOfErrors; i++ {
+	for i := uint16(0); i < ei.NumberOfErrors; i++ {
 		errorInfo := ErrorInformation{}
-		read(f, o, &errorInfo.LineNumber)
-		read(f, o, &errorInfo.NumberOfPixels)
+		read(r, o, &errorInfo.LineNumber)
+		read(r, o, &errorInfo.NumberOfPixels)
 		ei.Errors[i] = errorInfo
 	}
-	read(f, o, &ei.Spare)
+	read(r, o, &ei.Spare)
 
 	// Decode spare information block
 	sp := SpareInformationBlock{}
-	read(f, o, &sp.BlockNumber)
-	read(f, o, &sp.BlockLength)
-	read(f, o, &sp.Spare)
+	read(r, o, &sp.BlockNumber)
+	read(r, o, &sp.BlockLength)
+	read(r, o, &sp.Spare)
 
 	// Decode data
 	h := &HMFile{
@@ -423,8 +416,8 @@ func DecodeFile(f io.Reader) (*HMFile, error) {
 		SpareInfo:                sp,
 	}
 
-	h.ImageData = make([]I2, int(h.DataInfo.NumberOfColumns)*int(h.DataInfo.NumberOfLines))
-	read(f, o, &h.ImageData)
+	h.ImageData = make([]uint16, int(h.DataInfo.NumberOfColumns)*int(h.DataInfo.NumberOfLines))
+	read(r, o, &h.ImageData)
 
 	return h, nil
 }
@@ -432,4 +425,8 @@ func DecodeFile(f io.Reader) (*HMFile, error) {
 // read util function that reads and ignore error
 func read(f io.Reader, o binary.ByteOrder, dst any) {
 	_ = binary.Read(f, o, dst)
+}
+
+func (f *HMFile) ReadPixel() uint16 {
+	return uint16(0)
 }

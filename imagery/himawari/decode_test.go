@@ -7,12 +7,11 @@ import (
 	"testing"
 )
 
-func TestDecode(t *testing.T) {
+func TestDecodeMetadata(t *testing.T) {
 	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT.bz2")
 	if err != nil {
 		t.Error(err)
 	}
-
 	hw, err := DecodeFile(bzip2.NewReader(f))
 	if err != nil {
 		t.Error(err)
@@ -23,10 +22,10 @@ func TestDecode(t *testing.T) {
 			BlockLength:          282,
 			TotalHeaderBlocks:    11,
 			ByteOrder:            LittleEndian,
-			Satellite:            [16]C(c("Himawari-9")),
-			ProcessingCenter:     [16]C(c("MSC")),
-			ObservationArea:      [4]C(c("FLDK")),
-			ObservationAreaInfo:  [2]C(c("RT")),
+			Satellite:            [16]byte(c("Himawari-9")),
+			ProcessingCenter:     [16]byte(c("MSC")),
+			ObservationArea:      [4]byte(c("FLDK")),
+			ObservationAreaInfo:  [2]byte(c("RT")),
 			ObservationTimeline:  1340,
 			ObservationStartTime: 60248.56968491159,
 			ObservationEndTime:   60248.57007103656,
@@ -37,9 +36,9 @@ func TestDecode(t *testing.T) {
 			QualityFlag2:         0,
 			QualityFlag3:         77,
 			QualityFlag4:         1,
-			FileFormatVersion:    [32]C(c("1.3")),
-			FileName:             [128]C(c("HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")),
-			Spare:                [40]C{},
+			FileFormatVersion:    [32]byte(c("1.3")),
+			FileName:             [128]byte(c("HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")),
+			Spare:                [40]byte{},
 		},
 		DataInfo: DataInformationBlock{
 			BlockNumber:          2,
@@ -48,7 +47,7 @@ func TestDecode(t *testing.T) {
 			NumberOfColumns:      11000,
 			NumberOfLines:        1100,
 			CompressionFlag:      0,
-			Spare:                [40]C{},
+			Spare:                [40]byte{},
 		},
 		ProjectionInfo: ProjectionInformationBlock{
 			BlockNumber:             3,
@@ -66,7 +65,7 @@ func TestDecode(t *testing.T) {
 			RatioEquatorial:         1.006739501,
 			SDCoefficient:           1737122264,
 			ResamplingSize:          4,
-			Spare:                   [40]C{},
+			Spare:                   [40]byte{},
 		},
 		NavigationInfo: NavigationInformationBlock{
 			BlockNumber:                  4,
@@ -87,7 +86,7 @@ func TestDecode(t *testing.T) {
 				Y: 323216.6892999755,
 				Z: 168523.58232513716,
 			},
-			Spare: [40]C{},
+			Spare: [40]byte{},
 		},
 		CalibrationInfo: CalibrationInformationBlock{
 			BlockNumber:                       5,
@@ -105,7 +104,7 @@ func TestDecode(t *testing.T) {
 				UpdateTime:          57822.000000,
 				CalibratedSlope:     0.354141470588,
 				CalibratedIntercept: -7.082829411765,
-				Spare:               [80]C{},
+				Spare:               [80]byte{},
 			},
 		},
 		InterCalibrationInfo: InterCalibrationInformationBlock{
@@ -121,8 +120,8 @@ func TestDecode(t *testing.T) {
 			GSICSCorrectionEnd:         -10000000000.000000,
 			GSICSCalibrationUpperLimit: -10000000000.000000,
 			GSICSCalibrationLowerLimit: -10000000000.000000,
-			GSICSFileName:              [128]C{},
-			Spare:                      [56]C{},
+			GSICSFileName:              [128]byte{},
+			Spare:                      [56]byte{},
 		},
 		SegmentInfo: SegmentInformationBlock{
 			BlockNumber:                   7,
@@ -130,7 +129,7 @@ func TestDecode(t *testing.T) {
 			SegmentTotalNumber:            10,
 			SegmentSequenceNumber:         1,
 			FirstLineNumberOfImageSegment: 1,
-			Spare:                         [40]C{},
+			Spare:                         [40]byte{},
 		},
 		NavigationCorrectionInfo: NavigationCorrectionInformationBlock{
 			BlockNumber:                  8,
@@ -151,7 +150,7 @@ func TestDecode(t *testing.T) {
 					ShiftAmountForLineCorrection:   0,
 				},
 			},
-			Spare: [40]C{},
+			Spare: [40]byte{},
 		},
 		ObservationTimeInfo: ObservationTimeInformationBlock{
 			BlockNumber:              9,
@@ -175,19 +174,19 @@ func TestDecode(t *testing.T) {
 					ObservationTime: 60248.57007103656,
 				},
 			},
-			Spare: [40]C{},
+			Spare: [40]byte{},
 		},
 		ErrorInfo: ErrorInformationBlock{
 			BlockNumber:    10,
 			BlockLength:    47,
 			NumberOfErrors: 0,
 			Errors:         make([]ErrorInformation, 0),
-			Spare:          [40]C{},
+			Spare:          [40]byte{},
 		},
 		SpareInfo: SpareInformationBlock{
 			BlockNumber: 11,
 			BlockLength: 259,
-			Spare:       [256]C{},
+			Spare:       [256]byte{},
 		},
 	},
 		hw,
@@ -196,6 +195,14 @@ func TestDecode(t *testing.T) {
 	if diff != "" {
 		t.Errorf("received and expected not equal: %s", diff)
 	}
+}
+
+func TestReadData(t *testing.T) {
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT.bz2")
+	if err != nil {
+		t.Error(err)
+	}
+	hw, err := DecodeFile(bzip2.NewReader(f))
 	if len(hw.ImageData) != 11000*1100 {
 		t.Errorf("invalid image length")
 	}
@@ -204,8 +211,21 @@ func TestDecode(t *testing.T) {
 	}
 }
 
-func c(s string) []C {
-	c := make([]C, 1024)
-	copy(c, []C(s))
+func TestReadPixel(t *testing.T) {
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT.bz2")
+	if err != nil {
+		t.Error(err)
+	}
+	hw, err := DecodeFile(bzip2.NewReader(f))
+	px := hw.ReadPixel()
+	if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
+		t.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
+	}
+}
+
+// c Util function to return a byte array of and padded
+func c(s string) []byte {
+	c := make([]byte, 1024)
+	copy(c, s)
 	return c
 }
