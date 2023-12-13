@@ -23,7 +23,7 @@ type HMFile struct {
 	ObservationTimeInfo      ObservationTimeInformationBlock
 	ErrorInfo                ErrorInformationBlock
 	SpareInfo                SpareInformationBlock
-	ImageData                []uint16
+	ImageData                io.Reader
 }
 
 type Position struct {
@@ -36,7 +36,7 @@ type BasicInformation struct {
 	BlockNumber          uint8
 	BlockLength          uint16
 	TotalHeaderBlocks    uint16
-	ByteOrder            uint8
+	ByteOrder            binary.ByteOrder
 	Satellite            [16]byte
 	ProcessingCenter     [16]byte
 	ObservationArea      [4]byte
@@ -221,13 +221,15 @@ func DecodeFile(r io.Reader) (*HMFile, error) {
 	basicBuffer := bytes.NewBuffer(basicInfo)
 	i := BasicInformation{}
 	// Detect byte order
-	read(r, binary.BigEndian, &i.ByteOrder)
+	var byteOrderNum uint8
+	read(r, binary.BigEndian, &byteOrderNum)
 	var o binary.ByteOrder
-	if i.ByteOrder == LittleEndian {
+	if byteOrderNum == LittleEndian {
 		o = binary.LittleEndian
 	} else {
 		o = binary.BigEndian
 	}
+	i.ByteOrder = o
 	// Read existing buffer
 	read(basicBuffer, o, &i.BlockNumber)
 	read(basicBuffer, o, &i.BlockLength)
@@ -416,8 +418,8 @@ func DecodeFile(r io.Reader) (*HMFile, error) {
 		SpareInfo:                sp,
 	}
 
-	h.ImageData = make([]uint16, int(h.DataInfo.NumberOfColumns)*int(h.DataInfo.NumberOfLines))
-	read(r, o, &h.ImageData)
+	// Pass the reader ahead, rest of the file is image data
+	h.ImageData = r
 
 	return h, nil
 }
@@ -427,6 +429,21 @@ func read(f io.Reader, o binary.ByteOrder, dst any) {
 	_ = binary.Read(f, o, dst)
 }
 
-func (f *HMFile) ReadPixel() uint16 {
-	return uint16(0)
+func (f *HMFile) ReadPixel() (uint16, error) {
+	var pix uint16
+	err := binary.Read(f.ImageData, f.BasicInfo.ByteOrder, &pix)
+	if err != nil {
+		return uint16(0), err
+	}
+
+	return pix, nil
+}
+
+func (f *HMFile) Seek(s int) error {
+	// We have 16 bytes per pixel, needs s*2 bytes
+	_, err := io.CopyN(io.Discard, f.ImageData, int64(s)*2)
+	if err != nil {
+		return err
+	}
+	return nil
 }
