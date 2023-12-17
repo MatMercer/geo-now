@@ -1,7 +1,6 @@
 package main
 
 import (
-	"compress/bzip2"
 	"fmt"
 	"image"
 	"image/color"
@@ -12,7 +11,7 @@ import (
 )
 
 func main() {
-	err := himawariDecode(1)
+	err := himawariDecode(14)
 
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
@@ -23,7 +22,7 @@ func main() {
 
 func himawariDecode(downsample int) interface{} {
 	src := "HS_H09_20231130_0030_B04_FLDK_R10"
-	filePattern := "sample-data/%s_S%02d10.DAT.bz2"
+	filePattern := "sample-data/%s_S%02d10.DAT"
 	sectionCount := 10
 	var img *image.RGBA
 	for section := 0; section < sectionCount; section++ {
@@ -32,11 +31,7 @@ func himawariDecode(downsample int) interface{} {
 		if err != nil {
 			panic(err)
 		}
-		h, err := DecodeFile(bzip2.NewReader(f))
-		//_ = f.Close()
-		if err != nil {
-			panic(err)
-		}
+		h, err := DecodeFile(f)
 		width := int(h.DataInfo.NumberOfColumns)
 		height := int(h.DataInfo.NumberOfLines)
 		scale := 1.0 / float64(downsample)
@@ -59,16 +54,17 @@ func himawariDecode(downsample int) interface{} {
 				if err != nil {
 					return err
 				}
-				err = h.Skip(skipPx)
+				err = h.Seek(skipPx)
 				if err != nil {
 					return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, x, y, err)
 				}
 			}
-			err = h.Skip(width * skipPx)
+			err = h.Seek(width * skipPx)
 			if err != nil {
 				return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, 0, y, err)
 			}
 		}
+		_ = f.Close()
 	}
 	fimg, _ := os.Create("image.jpg")
 	err := jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})

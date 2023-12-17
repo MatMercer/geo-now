@@ -23,7 +23,7 @@ type HMFile struct {
 	ObservationTimeInfo      ObservationTimeInformationBlock
 	ErrorInfo                ErrorInformationBlock
 	SpareInfo                SpareInformationBlock
-	ImageData                io.Reader
+	ImageData                io.ReadSeeker
 }
 
 type Position struct {
@@ -210,7 +210,7 @@ type SpareInformationBlock struct {
 	Spare       [256]byte
 }
 
-func DecodeFile(r io.Reader) (*HMFile, error) {
+func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 	// Decode basic info
 	// uint8+uint16+uint16=5
 	basicInfo := make([]byte, 5)
@@ -235,7 +235,7 @@ func DecodeFile(r io.Reader) (*HMFile, error) {
 	read(basicBuffer, o, &i.BlockLength)
 	read(basicBuffer, o, &i.TotalHeaderBlocks)
 
-	// Skip Byte order because already read and continue normal decoding
+	// Seek Byte order because already read and continue normal decoding
 	read(r, o, &i.Satellite)
 	read(r, o, &i.ProcessingCenter)
 	read(r, o, &i.ObservationArea)
@@ -439,9 +439,9 @@ func (f *HMFile) ReadPixel() (uint16, error) {
 	return pix, nil
 }
 
-func (f *HMFile) Skip(s int) error {
+func (f *HMFile) Seek(s int) error {
 	// We have 16 bytes per pixel, needs s*2 bytes
-	_, err := io.CopyN(io.Discard, f.ImageData, int64(s)*2)
+	_, err := f.ImageData.Seek(2*int64(s), io.SeekCurrent)
 	if err != nil {
 		return err
 	}

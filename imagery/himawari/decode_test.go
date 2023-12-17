@@ -243,7 +243,7 @@ func TestReadSkip(t *testing.T) {
 	count := 1
 	desiredCount := 11000*1100 - skip
 	_, _ = hw.ReadPixel()
-	err = hw.Skip(skip)
+	err = hw.Seek(skip)
 	if err != nil {
 		t.Errorf("failed to skip %s", err)
 	}
