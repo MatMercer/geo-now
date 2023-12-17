@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	err := himawariDecode(14)
+	err := himawariDecode(5)
 
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
@@ -21,6 +21,12 @@ func main() {
 }
 
 func himawariDecode(downsample int) interface{} {
+	// TODO: extract into multiple functions
+	// opening the files through a pattern
+	// assuming 10 as the section count
+	// decoding the header of each section
+	// joining each section to an *image scaling if necessary
+	// encoding to jpeg
 	src := "HS_H09_20231130_0030_B04_FLDK_R10"
 	filePattern := "sample-data/%s_S%02d10.DAT"
 	sectionCount := 10
