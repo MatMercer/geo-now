@@ -5,20 +5,32 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"io"
 	"math"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
+	"time"
 )
 
 func main() {
-	img, err := himawariDecode(8)
-
+	src := "HS_H09_20231130_0030_B04_FLDK_R10"
+	dir := "./sample-data"
+	sections, err := openFiles(dir, src)
+	if err != nil {
+		fmt.Printf("Failed to open himawari sections: %s\n", err)
+		return
+	}
+	img, err := himawariDecode(sections, 8)
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
 		return
 	}
 
-	fimg, _ := os.Create("image.jpg")
+	fileName := src + fmt.Sprintf("_T%d", time.Now().Unix()) + ".jpg"
+	fimg, _ := os.Create(fileName)
+	fmt.Printf("Saving to %s...\n", fileName)
 	err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
 	if err != nil {
 		panic(err)
@@ -27,7 +39,42 @@ func main() {
 		panic(err)
 	}
 
-	_ = exec.Command("explorer.exe", "image.jpg").Run()
+	_ = exec.Command("explorer.exe", fileName).Run()
+}
+
+// openFiles Returns a list of file sections sorted asc
+func openFiles(dir string, pattern string) ([]io.ReadSeekCloser, error) {
+	var filesWithPattern []string
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("error reading %q directory: %s", dir, err)
+	}
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), pattern) {
+			filesWithPattern = append(filesWithPattern, dir+"/"+file.Name())
+		}
+	}
+	slices.Sort(filesWithPattern)
+	var oFiles []io.ReadSeekCloser
+	for _, f := range filesWithPattern {
+		ff, err := os.Open(f)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open %q file: %s", f, err)
+		}
+		oFiles = append(oFiles, ff)
+	}
+
+	return oFiles, nil
+}
+
+// Aux struct to store decode metadata
+type sectionDecode struct {
+	width        int
+	height       int
+	downsample   int
+	scale        float64
+	scaledWidth  int
+	scaledHeight int
 }
 
 func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) error {
@@ -57,41 +104,22 @@ func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) 
 	return nil
 }
 
-// Aux struct to store decode metadata
-type sectionDecode struct {
-	width        int
-	height       int
-	downsample   int
-	scale        float64
-	scaledWidth  int
-	scaledHeight int
-}
-
-func himawariDecode(downsample int) (*image.RGBA, error) {
-	// TODO: extract into multiple functions
-	// opening the files through a pattern
-	src := "HS_H09_20231130_0030_B04_FLDK_R10"
-	filePattern := "sample-data/%s_S%02d10.DAT"
+func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, error) {
 	var img *image.RGBA
 
 	// Decode first section to gather file info
-	f, err := os.Open(fmt.Sprintf(filePattern, src, 1))
+	firstSection, err := DecodeFile(sections[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode first section: %s", err)
 	}
-	firstSection, err := DecodeFile(f)
-	totalSections := int(firstSection.SegmentInfo.SegmentTotalNumber)
+	totalSections := len(sections)
 	d := calculateScaling(firstSection, downsample)
 	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*totalSections))
 	err = decodeSection(firstSection, downsample, d, img)
 	// Continue to other sections
 	for section := 1; section < totalSections; section++ {
 		// Decode data
-		f, err := os.Open(fmt.Sprintf(filePattern, src, section+1))
-		if err != nil {
-			panic(err)
-		}
-		h, err := DecodeFile(f)
+		h, err := DecodeFile(sections[section])
 		err = decodeSection(h, downsample, d, img)
 		if err != nil {
 			return nil, err
