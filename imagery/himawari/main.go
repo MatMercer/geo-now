@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	err := himawariDecode(8)
+	err := himawariDecode(1)
 
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
@@ -45,24 +45,29 @@ func himawariDecode(downsample int) interface{} {
 		// Start and End Y are the relative positions for the final image based in a section
 		startY := scaledHeight * section
 		endY := startY + scaledHeight
+		// Amount of pixels for down sample skip
+		skipPx := downsample - 1
 		// Initialize image if first loop
 		if section == 0 {
 			img = image.NewRGBA(image.Rect(0, 0, scaledWidth, scaledHeight*sectionCount))
 		}
 		fmt.Printf("Decoding %dx%d from y %d-%d\n", width, height, startY, endY)
-		d := 0
-		for y, l := startY, 1.0; y < endY; y, l = y+1, l+1 {
+		for y := startY; y < endY; y++ {
 			for x := 0; x < scaledWidth; x++ {
 				// Do err and outside scan area logic
-				rawData, err := h.ReadPixel()
+				err := readPixel(h, img, x, y)
 				if err != nil {
-					return fmt.Errorf("failed to read pixel at %d:%d: %s", x, y, err)
+					return err
 				}
-				pToImage(h, rawData, img, x, y)
-				h.Seek(downsample - 1)
-				d += downsample - 1
+				err = h.Skip(skipPx)
+				if err != nil {
+					return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, x, y, err)
+				}
 			}
-			h.Seek(width * (downsample - 1))
+			err = h.Skip(width * skipPx)
+			if err != nil {
+				return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, 0, y, err)
+			}
 		}
 	}
 	fimg, _ := os.Create("image.jpg")
@@ -77,17 +82,23 @@ func himawariDecode(downsample int) interface{} {
 	return nil
 }
 
-func pToImage(h *HMFile, data uint16, img *image.RGBA, x int, y int) {
-	// Err check
+func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
+	data, err := h.ReadPixel()
+	if err != nil {
+		return fmt.Errorf("failed to read pixel at %d:%d: %s", x, y, err)
+	}
 	if data == h.CalibrationInfo.CountValueOfPixelsOutsideScanArea || data == h.CalibrationInfo.CountValueOfErrorPixels {
 		img.Set(x, y, color.Black)
-		return
+		return nil
 	}
+
 	// Get a number between 0 and 1 from max number of pixels
 	// different bands has different number of pixels, e.g., band 03 has 11
 	coef := float64(data) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
 	pc := pixel(coef, 1)
 	img.Set(x, y, color.RGBA{R: uint8(pc), G: uint8(pc), B: uint8(pc), A: 255})
+
+	return nil
 }
 
 // pixel Returns 255*coef clamping at coef, brightness adjusted

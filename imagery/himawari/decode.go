@@ -439,7 +439,7 @@ func (f *HMFile) ReadPixel() (uint16, error) {
 	return pix, nil
 }
 
-func (f *HMFile) Seek(s int) error {
+func (f *HMFile) Skip(s int) error {
 	// We have 16 bytes per pixel, needs s*2 bytes
 	_, err := io.CopyN(io.Discard, f.ImageData, int64(s)*2)
 	if err != nil {
