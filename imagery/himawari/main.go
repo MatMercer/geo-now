@@ -121,9 +121,13 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 	totalSections := len(sections)
 	d := calculateScaling(firstSection, downsample)
 	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*totalSections))
-	err = decodeSection(firstSection, downsample, d, img)
 	// Continue to other sections
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		decodeSection(firstSection, downsample, d, img)
+	}()
 	for section := 1; section < totalSections; section++ {
 		wg.Add(1)
 		// Decode data
