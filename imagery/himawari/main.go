@@ -20,20 +20,15 @@ func main() {
 	_ = exec.Command("explorer.exe", "image.jpg").Run()
 }
 
-func decodeSection(h *HMFile, downsample int, img *image.RGBA) error {
-	width := int(h.DataInfo.NumberOfColumns)
-	height := int(h.DataInfo.NumberOfLines)
-	scale := 1.0 / float64(downsample)
-	scaledWidth := int(scale * float64(width))
-	scaledHeight := int(scale * float64(height))
+func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) error {
 	// Start and End Y are the relative positions for the final image based in a section
-	startY := scaledHeight * int(h.SegmentInfo.SegmentSequenceNumber-1)
-	endY := startY + scaledHeight
+	startY := d.scaledHeight * int(h.SegmentInfo.SegmentSequenceNumber-1)
+	endY := startY + d.scaledHeight
 	// Amount of pixels for down sample skip
 	skipPx := downsample - 1
-	fmt.Printf("Decoding %dx%d from y %d-%d\n", width, height, startY, endY)
+	fmt.Printf("Decoding %dx%d from y %d-%d\n", d.width, d.height, startY, endY)
 	for y := startY; y < endY; y++ {
-		for x := 0; x < scaledWidth; x++ {
+		for x := 0; x < d.scaledWidth; x++ {
 			// Do err and outside scan area logic
 			err := readPixel(h, img, x, y)
 			if err != nil {
@@ -44,12 +39,22 @@ func decodeSection(h *HMFile, downsample int, img *image.RGBA) error {
 				return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, x, y, err)
 			}
 		}
-		err := h.Seek(width * skipPx)
+		err := h.Seek(d.width * skipPx)
 		if err != nil {
 			return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, 0, y, err)
 		}
 	}
 	return nil
+}
+
+// Aux struct to store decode metadata
+type sectionDecode struct {
+	width        int
+	height       int
+	downsample   int
+	scale        float64
+	scaledWidth  int
+	scaledHeight int
 }
 
 func himawariDecode(downsample int) error {
@@ -69,13 +74,16 @@ func himawariDecode(downsample int) error {
 	firstSech, err := DecodeFile(f)
 	sectionCount := int(firstSech.SegmentInfo.SegmentTotalNumber)
 
-	width := int(firstSech.DataInfo.NumberOfColumns)
-	height := int(firstSech.DataInfo.NumberOfLines)
-	scale := 1.0 / float64(downsample)
-	scaledWidth := int(scale * float64(width))
-	scaledHeight := int(scale * float64(height))
-	img = image.NewRGBA(image.Rect(0, 0, scaledWidth, scaledHeight*sectionCount))
-	err = decodeSection(firstSech, downsample, img)
+	d := sectionDecode{
+		width:      int(firstSech.DataInfo.NumberOfColumns),
+		height:     int(firstSech.DataInfo.NumberOfLines),
+		downsample: downsample,
+		scale:      1.0 / float64(downsample),
+	}
+	d.scaledWidth = int(d.scale * float64(d.width))
+	d.scaledHeight = int(d.scale * float64(d.height))
+	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*sectionCount))
+	err = decodeSection(firstSech, downsample, d, img)
 	for section := 1; section < sectionCount; section++ {
 		// Decode data
 		f, err := os.Open(fmt.Sprintf(filePattern, src, section+1))
@@ -83,7 +91,7 @@ func himawariDecode(downsample int) error {
 			panic(err)
 		}
 		h, err := DecodeFile(f)
-		err = decodeSection(h, downsample, img)
+		err = decodeSection(h, downsample, d, img)
 		if err != nil {
 			return err
 		}
