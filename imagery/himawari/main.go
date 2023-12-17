@@ -11,12 +11,22 @@ import (
 )
 
 func main() {
-	err := himawariDecode(8)
+	img, err := himawariDecode(8)
 
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
 		return
 	}
+
+	fimg, _ := os.Create("image.jpg")
+	err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
+	if err != nil {
+		panic(err)
+	}
+	if err = fimg.Close(); err != nil {
+		panic(err)
+	}
+
 	_ = exec.Command("explorer.exe", "image.jpg").Run()
 }
 
@@ -57,11 +67,9 @@ type sectionDecode struct {
 	scaledHeight int
 }
 
-func himawariDecode(downsample int) error {
+func himawariDecode(downsample int) (*image.RGBA, error) {
 	// TODO: extract into multiple functions
 	// opening the files through a pattern
-	// assuming 10 as the section count
-	// encoding to jpeg
 	src := "HS_H09_20231130_0030_B04_FLDK_R10"
 	filePattern := "sample-data/%s_S%02d10.DAT"
 	var img *image.RGBA
@@ -69,22 +77,15 @@ func himawariDecode(downsample int) error {
 	// Decode first section to gather file info
 	f, err := os.Open(fmt.Sprintf(filePattern, src, 1))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	firstSech, err := DecodeFile(f)
-	sectionCount := int(firstSech.SegmentInfo.SegmentTotalNumber)
-
-	d := sectionDecode{
-		width:      int(firstSech.DataInfo.NumberOfColumns),
-		height:     int(firstSech.DataInfo.NumberOfLines),
-		downsample: downsample,
-		scale:      1.0 / float64(downsample),
-	}
-	d.scaledWidth = int(d.scale * float64(d.width))
-	d.scaledHeight = int(d.scale * float64(d.height))
-	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*sectionCount))
-	err = decodeSection(firstSech, downsample, d, img)
-	for section := 1; section < sectionCount; section++ {
+	firstSection, err := DecodeFile(f)
+	totalSections := int(firstSection.SegmentInfo.SegmentTotalNumber)
+	d := calculateScaling(firstSection, downsample)
+	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*totalSections))
+	err = decodeSection(firstSection, downsample, d, img)
+	// Continue to other sections
+	for section := 1; section < totalSections; section++ {
 		// Decode data
 		f, err := os.Open(fmt.Sprintf(filePattern, src, section+1))
 		if err != nil {
@@ -93,19 +94,24 @@ func himawariDecode(downsample int) error {
 		h, err := DecodeFile(f)
 		err = decodeSection(h, downsample, d, img)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	fimg, _ := os.Create("image.jpg")
-	err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
-	if err != nil {
-		panic(err)
-	}
-	if err = fimg.Close(); err != nil {
-		return err
-	}
 
-	return nil
+	return img, nil
+}
+
+func calculateScaling(h *HMFile, downsample int) sectionDecode {
+	d := sectionDecode{
+		width:      int(h.DataInfo.NumberOfColumns),
+		height:     int(h.DataInfo.NumberOfLines),
+		downsample: downsample,
+		scale:      1.0 / float64(downsample),
+	}
+	d.scaledWidth = int(d.scale * float64(d.width))
+	d.scaledHeight = int(d.scale * float64(d.height))
+
+	return d
 }
 
 func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
