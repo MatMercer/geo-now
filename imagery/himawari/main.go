@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	err := himawariDecode(5)
+	err := himawariDecode(8)
 
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
@@ -20,60 +20,76 @@ func main() {
 	_ = exec.Command("explorer.exe", "image.jpg").Run()
 }
 
-func himawariDecode(downsample int) interface{} {
+func decodeSection(h *HMFile, downsample int, img *image.RGBA) error {
+	width := int(h.DataInfo.NumberOfColumns)
+	height := int(h.DataInfo.NumberOfLines)
+	scale := 1.0 / float64(downsample)
+	scaledWidth := int(scale * float64(width))
+	scaledHeight := int(scale * float64(height))
+	// Start and End Y are the relative positions for the final image based in a section
+	startY := scaledHeight * int(h.SegmentInfo.SegmentSequenceNumber-1)
+	endY := startY + scaledHeight
+	// Amount of pixels for down sample skip
+	skipPx := downsample - 1
+	fmt.Printf("Decoding %dx%d from y %d-%d\n", width, height, startY, endY)
+	for y := startY; y < endY; y++ {
+		for x := 0; x < scaledWidth; x++ {
+			// Do err and outside scan area logic
+			err := readPixel(h, img, x, y)
+			if err != nil {
+				return err
+			}
+			err = h.Seek(skipPx)
+			if err != nil {
+				return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, x, y, err)
+			}
+		}
+		err := h.Seek(width * skipPx)
+		if err != nil {
+			return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, 0, y, err)
+		}
+	}
+	return nil
+}
+
+func himawariDecode(downsample int) error {
 	// TODO: extract into multiple functions
 	// opening the files through a pattern
 	// assuming 10 as the section count
-	// decoding the header of each section
-	// joining each section to an *image scaling if necessary
 	// encoding to jpeg
 	src := "HS_H09_20231130_0030_B04_FLDK_R10"
 	filePattern := "sample-data/%s_S%02d10.DAT"
-	sectionCount := 10
 	var img *image.RGBA
-	for section := 0; section < sectionCount; section++ {
+
+	// Decode first section to gather file info
+	f, err := os.Open(fmt.Sprintf(filePattern, src, 1))
+	if err != nil {
+		return err
+	}
+	firstSech, err := DecodeFile(f)
+	sectionCount := int(firstSech.SegmentInfo.SegmentTotalNumber)
+
+	width := int(firstSech.DataInfo.NumberOfColumns)
+	height := int(firstSech.DataInfo.NumberOfLines)
+	scale := 1.0 / float64(downsample)
+	scaledWidth := int(scale * float64(width))
+	scaledHeight := int(scale * float64(height))
+	img = image.NewRGBA(image.Rect(0, 0, scaledWidth, scaledHeight*sectionCount))
+	err = decodeSection(firstSech, downsample, img)
+	for section := 1; section < sectionCount; section++ {
 		// Decode data
 		f, err := os.Open(fmt.Sprintf(filePattern, src, section+1))
 		if err != nil {
 			panic(err)
 		}
 		h, err := DecodeFile(f)
-		width := int(h.DataInfo.NumberOfColumns)
-		height := int(h.DataInfo.NumberOfLines)
-		scale := 1.0 / float64(downsample)
-		scaledWidth := int(scale * float64(width))
-		scaledHeight := int(scale * float64(height))
-		// Start and End Y are the relative positions for the final image based in a section
-		startY := scaledHeight * section
-		endY := startY + scaledHeight
-		// Amount of pixels for down sample skip
-		skipPx := downsample - 1
-		// Initialize image if first loop
-		if section == 0 {
-			img = image.NewRGBA(image.Rect(0, 0, scaledWidth, scaledHeight*sectionCount))
+		err = decodeSection(h, downsample, img)
+		if err != nil {
+			return err
 		}
-		fmt.Printf("Decoding %dx%d from y %d-%d\n", width, height, startY, endY)
-		for y := startY; y < endY; y++ {
-			for x := 0; x < scaledWidth; x++ {
-				// Do err and outside scan area logic
-				err := readPixel(h, img, x, y)
-				if err != nil {
-					return err
-				}
-				err = h.Seek(skipPx)
-				if err != nil {
-					return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, x, y, err)
-				}
-			}
-			err = h.Seek(width * skipPx)
-			if err != nil {
-				return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, 0, y, err)
-			}
-		}
-		_ = f.Close()
 	}
 	fimg, _ := os.Create("image.jpg")
-	err := jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
+	err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
 	if err != nil {
 		panic(err)
 	}
