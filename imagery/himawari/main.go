@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,7 +23,7 @@ func main() {
 		fmt.Printf("Failed to open himawari sections: %s\n", err)
 		return
 	}
-	img, err := himawariDecode(sections, 8)
+	img, err := himawariDecode(sections, 4)
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
 		return
@@ -105,6 +106,11 @@ func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) 
 }
 
 func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, error) {
+	defer func() {
+		for _, s := range sections {
+			_ = s.Close()
+		}
+	}()
 	var img *image.RGBA
 
 	// Decode first section to gather file info
@@ -117,14 +123,21 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*totalSections))
 	err = decodeSection(firstSection, downsample, d, img)
 	// Continue to other sections
+	var wg sync.WaitGroup
 	for section := 1; section < totalSections; section++ {
+		wg.Add(1)
 		// Decode data
-		h, err := DecodeFile(sections[section])
-		err = decodeSection(h, downsample, d, img)
-		if err != nil {
-			return nil, err
-		}
+		go func(f io.ReadSeeker) {
+			defer wg.Done()
+			h, err := DecodeFile(f)
+			err = decodeSection(h, downsample, d, img)
+			// TODO: err check
+			if err != nil {
+				//return nil, err
+			}
+		}(sections[section])
 	}
+	wg.Wait()
 
 	return img, nil
 }
