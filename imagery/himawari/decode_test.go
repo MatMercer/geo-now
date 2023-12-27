@@ -232,6 +232,42 @@ func TestReadPixel(t *testing.T) {
 	}
 }
 
+/*
+*
+BenchmarkHMFile_ReadPixel-16             4035825               291.7 ns/op
+BenchmarkHMFile_ReadPixel-16             4127251               288.8 ns/op
+BenchmarkHMFile_ReadPixel-16             4090549               291.7 ns/op
+BenchmarkHMFile_ReadPixel-16             4137110               292.6 ns/op
+BenchmarkHMFile_ReadPixel-16             4097176               294.5 ns/op
+BenchmarkHMFile_ReadPixel-16             4053456               290.1 ns/op
+BenchmarkHMFile_ReadPixel-16             4121949               290.4 ns/op
+BenchmarkHMFile_ReadPixel-16             4016748               294.3 ns/op
+BenchmarkHMFile_ReadPixel-16             4122049               306.3 ns/op
+BenchmarkHMFile_ReadPixel-16             4105447               291.5 ns/op
+*/
+func BenchmarkHMFile_ReadPixel(b *testing.B) {
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
+	if err != nil {
+		b.Error(err)
+	}
+	hw, err := DecodeFile(f)
+	px, _ := hw.ReadPixel()
+	if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
+		b.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
+	}
+	count := 1
+	for {
+		if count > b.N {
+			break
+		}
+		_, err = hw.ReadPixel()
+		if err == io.EOF {
+			break
+		}
+		count++
+	}
+}
+
 func TestReadSkip(t *testing.T) {
 	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
