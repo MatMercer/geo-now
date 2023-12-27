@@ -1,7 +1,6 @@
 package main
 
 import (
-	"compress/bzip2"
 	"encoding/binary"
 	"github.com/google/go-cmp/cmp"
 	"io"
@@ -10,11 +9,11 @@ import (
 )
 
 func TestDecodeMetadata(t *testing.T) {
-	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT.bz2")
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
 		t.Error(err)
 	}
-	hw, err := DecodeFile(bzip2.NewReader(f))
+	hw, err := DecodeFile(f)
 	if err != nil {
 		t.Error(err)
 	}
@@ -209,11 +208,11 @@ func TestReadData(t *testing.T) {
 }
 
 func TestReadPixel(t *testing.T) {
-	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT.bz2")
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
 		t.Error(err)
 	}
-	hw, err := DecodeFile(bzip2.NewReader(f))
+	hw, err := DecodeFile(f)
 	px, _ := hw.ReadPixel()
 	if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
 		t.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
@@ -234,11 +233,11 @@ func TestReadPixel(t *testing.T) {
 }
 
 func TestReadSkip(t *testing.T) {
-	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT.bz2")
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
 		t.Error(err)
 	}
-	hw, err := DecodeFile(bzip2.NewReader(f))
+	hw, err := DecodeFile(f)
 	skip := 11000*1100 - 1
 	count := 1
 	desiredCount := 11000*1100 - skip

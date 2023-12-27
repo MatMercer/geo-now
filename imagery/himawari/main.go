@@ -16,14 +16,15 @@ import (
 )
 
 func main() {
-	src := "HS_H09_20231130_0030_B04_FLDK_R10"
+	src := "HS_H09_20231130_0030_B03_FLDK_R05"
 	dir := "./sample-data"
 	sections, err := openFiles(dir, src)
+	downsample := 1
 	if err != nil {
 		fmt.Printf("Failed to open himawari sections: %s\n", err)
 		return
 	}
-	img, err := himawariDecode(sections, 4)
+	img, err := himawariDecode(sections, downsample)
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
 		return
