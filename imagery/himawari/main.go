@@ -93,14 +93,14 @@ func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) 
 			if err != nil {
 				return err
 			}
-			err = h.Seek(skipPx)
+			err = h.Skip(skipPx)
 			if err != nil {
-				return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, x, y, err)
+				return fmt.Errorf("failed to skip %d pixels at %d:%d: %s skipPx", skipPx, x, y, err)
 			}
 		}
-		err := h.Seek(d.width * skipPx)
+		err := h.Skip(d.width * skipPx)
 		if err != nil {
-			return fmt.Errorf("failed to skip %d pixels at %d:%d: %skipPx", skipPx, 0, y, err)
+			return fmt.Errorf("failed to skip %d pixels at %d:%d: %s skipPx", skipPx, 0, y, err)
 		}
 	}
 	return nil
@@ -171,7 +171,7 @@ func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
 	}
 
 	// Get a number between 0 and 1 from max number of pixels
-	// different bands has different number of pixels, e.g., band 03 has 11
+	// different bands has different number of pixels bits, e.g., band 03 has 11
 	coef := float64(data) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
 	pc := pixel(coef, 1)
 	img.Set(x, y, color.RGBA{R: uint8(pc), G: uint8(pc), B: uint8(pc), A: 255})

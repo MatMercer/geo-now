@@ -24,6 +24,11 @@ type HMFile struct {
 	ErrorInfo                ErrorInformationBlock
 	SpareInfo                SpareInformationBlock
 	ImageData                io.ReadSeeker
+	cache                    io.Reader
+	readCount                int
+	totalReadCount           int
+	lastSize                 int
+	bufferSize               int
 }
 
 type Position struct {
@@ -235,7 +240,7 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 	read(basicBuffer, o, &i.BlockLength)
 	read(basicBuffer, o, &i.TotalHeaderBlocks)
 
-	// Seek Byte order because already read and continue normal decoding
+	// Skip Byte order because already read and continue normal decoding
 	read(r, o, &i.Satellite)
 	read(r, o, &i.ProcessingCenter)
 	read(r, o, &i.ObservationArea)
@@ -421,6 +426,9 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 	// Pass the reader ahead, rest of the file is image data
 	h.ImageData = r
 
+	// Default values
+	h.bufferSize = 100000 * 2 // 100k pixels
+
 	return h, nil
 }
 
@@ -430,20 +438,51 @@ func read(f io.Reader, o binary.ByteOrder, dst any) {
 }
 
 func (f *HMFile) ReadPixel() (uint16, error) {
+	f.updateCache()
+
 	var pix uint16
-	err := binary.Read(f.ImageData, f.BasicInfo.ByteOrder, &pix)
+	err := binary.Read(f.cache, f.BasicInfo.ByteOrder, &pix)
 	if err != nil {
 		return uint16(0), err
 	}
+	if f.totalReadCount == int(f.DataInfo.NumberOfColumns)*int(f.DataInfo.NumberOfLines) {
+		return uint16(0), io.EOF
+	}
 
+	f.readCount += 2
+	f.totalReadCount += 1
 	return pix, nil
 }
 
-func (f *HMFile) Seek(s int) error {
-	// We have 16 bytes per pixel, needs s*2 bytes
-	_, err := f.ImageData.Seek(2*int64(s), io.SeekCurrent)
-	if err != nil {
-		return err
+func (f *HMFile) updateCache() {
+	if f.readCount == f.lastSize {
+		buffer := make([]byte, f.bufferSize)
+		// TODO: handle error
+		n, _ := f.ImageData.Read(buffer)
+		f.lastSize = n
+		f.readCount = 0
+		f.cache = bytes.NewReader(buffer)
 	}
+}
+
+// Skip Skips N pixels
+func (f *HMFile) Skip(n int) error {
+	// We have 16 bytes per pixel, needs s*2 bytes
+	skipCount := 2 * n
+	// If we should skip the file or the cache
+	if f.bufferSize-f.readCount <= skipCount {
+		// Skip the skip count - what we already will skip from the cache
+		skip := skipCount - (f.bufferSize - f.readCount)
+		io.CopyN(io.Discard, f.ImageData, int64(skip))
+		// Force an updated cache
+		f.readCount = skipCount
+		f.updateCache()
+	} else {
+		_, err := io.CopyN(io.Discard, f.cache, int64(skipCount))
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
