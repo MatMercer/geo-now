@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/google/go-cmp/cmp"
 	"io"
 	"math"
@@ -239,27 +240,45 @@ func TestReadPixel(t *testing.T) {
 	}
 }
 
+var table = []struct {
+	bufferSize int
+}{
+	{bufferSize: 100},
+	{bufferSize: 1000},
+	{bufferSize: 5000},
+	{bufferSize: 10000},
+	{bufferSize: 20000},
+	{bufferSize: 100000},
+}
+
 func BenchmarkHMFile_ReadPixel(b *testing.B) {
-	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
-	if err != nil {
-		b.Error(err)
+	for _, v := range table {
+		b.Run(fmt.Sprintf("buffer_size_%d", v.bufferSize), func(b *testing.B) {
+			f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
+			if err != nil {
+				b.Error(err)
+			}
+			hw, err := DecodeFile(f)
+			// Overwrite buffer size
+			hw.bufferSize = v.bufferSize
+			px, _ := hw.ReadPixel()
+			if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
+				b.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
+			}
+			count := 1
+			for {
+				if count > b.N {
+					break
+				}
+				_, err = hw.ReadPixel()
+				if err == io.EOF {
+					break
+				}
+				count++
+			}
+		})
 	}
-	hw, err := DecodeFile(f)
-	px, _ := hw.ReadPixel()
-	if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
-		b.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
-	}
-	count := 1
-	for {
-		if count > b.N {
-			break
-		}
-		_, err = hw.ReadPixel()
-		if err == io.EOF {
-			break
-		}
-		count++
-	}
+
 }
 
 func TestReadSkipSinglePixel(t *testing.T) {
