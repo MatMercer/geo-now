@@ -427,7 +427,7 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 	h.ImageData = r
 
 	// Default values
-	h.bufferSize = 100000 * 2 // 100k pixels
+	h.bufferSize = 10000 * 2 // 20k pixels
 
 	return h, nil
 }
