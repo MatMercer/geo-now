@@ -6,7 +6,9 @@ import (
 	"io"
 	"math"
 	"os"
+	"strings"
 	"testing"
+	"unicode"
 )
 
 func TestDecodeMetadata(t *testing.T) {
@@ -192,7 +194,11 @@ func TestDecodeMetadata(t *testing.T) {
 		},
 	},
 		hw,
-		cmp.FilterPath(func(p cmp.Path) bool { return p.Last().String() == ".ImageData" }, cmp.Ignore()),
+		cmp.FilterPath(func(p cmp.Path) bool {
+			field := p.Last().String()
+			return field == ".ImageData" || startsWithLowercase(strings.Replace(field, ".", "", 1))
+		}, cmp.Ignore()),
+		cmp.AllowUnexported(HMFile{}),
 	)
 	if diff != "" {
 		t.Errorf("received and expected not equal: %s", diff)
@@ -233,19 +239,6 @@ func TestReadPixel(t *testing.T) {
 	}
 }
 
-/*
-*
-BenchmarkHMFile_ReadPixel-16             4035825               291.7 ns/op
-BenchmarkHMFile_ReadPixel-16             4127251               288.8 ns/op
-BenchmarkHMFile_ReadPixel-16             4090549               291.7 ns/op
-BenchmarkHMFile_ReadPixel-16             4137110               292.6 ns/op
-BenchmarkHMFile_ReadPixel-16             4097176               294.5 ns/op
-BenchmarkHMFile_ReadPixel-16             4053456               290.1 ns/op
-BenchmarkHMFile_ReadPixel-16             4121949               290.4 ns/op
-BenchmarkHMFile_ReadPixel-16             4016748               294.3 ns/op
-BenchmarkHMFile_ReadPixel-16             4122049               306.3 ns/op
-BenchmarkHMFile_ReadPixel-16             4105447               291.5 ns/op
-*/
 func BenchmarkHMFile_ReadPixel(b *testing.B) {
 	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
@@ -367,4 +360,17 @@ func c(s string) []byte {
 	c := make([]byte, 1024)
 	copy(c, s)
 	return c
+}
+
+// startsWithLowercase checks if the string starts with a lowercase letter.
+func startsWithLowercase(s string) bool {
+	if s == "" {
+		return false // An empty string does not start with a lowercase letter.
+	}
+
+	// Get the first rune (character) of the string.
+	r := []rune(s)[0]
+
+	// Check if the first rune is a lowercase letter.
+	return unicode.IsLower(r)
 }
