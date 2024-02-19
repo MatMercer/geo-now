@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/google/go-cmp/cmp"
 	"io"
+	"math"
 	"os"
 	"testing"
 )
@@ -268,17 +269,19 @@ func BenchmarkHMFile_ReadPixel(b *testing.B) {
 	}
 }
 
-func TestReadSkip(t *testing.T) {
+func TestReadSkipSinglePixel(t *testing.T) {
 	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
 		t.Error(err)
 	}
 	hw, err := DecodeFile(f)
-	skip := 11000*1100 - 1
-	count := 1
-	desiredCount := 11000*1100 - skip
+	totalPixels := 11000 * 1100
+	skip := totalPixels - 1
+	desiredCount := totalPixels - skip
 	_, _ = hw.ReadPixel()
 	err = hw.Skip(skip)
+
+	count := 1
 	if err != nil {
 		t.Errorf("failed to skip %s", err)
 	}
@@ -295,6 +298,68 @@ func TestReadSkip(t *testing.T) {
 	if count != desiredCount {
 		t.Errorf("expected to read %d pixels but read %d", desiredCount, count)
 	}
+}
+
+func TestReadSkipEntireFile(t *testing.T) {
+	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
+	if err != nil {
+		t.Error(err)
+	}
+	hw, err := DecodeFile(f)
+	totalPixels := 11000 * 1100
+	err = hw.Skip(totalPixels)
+
+	count := 0
+	if err != nil {
+		t.Errorf("failed to skip %s", err)
+	}
+	for {
+		_, err = hw.ReadPixel()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			t.Errorf("failed to read pixel: %s", err)
+		}
+		count++
+	}
+
+	if count != 0 {
+		t.Errorf("expected to read %d pixels but read %d", 0, count)
+	}
+}
+
+func FuzzHMFile_Skip(f *testing.F) {
+	f.Add(5)
+	f.Fuzz(func(t *testing.T, skip int) {
+		skip = int(math.Abs(float64(skip))) * 1000
+		f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
+		if err != nil {
+			t.Error(err)
+		}
+		hw, err := DecodeFile(f)
+		totalPixels := 11000 * 1100
+		desiredCount := totalPixels - skip
+		_, _ = hw.ReadPixel()
+		err = hw.Skip(skip)
+
+		count := 1
+		if err != nil {
+			t.Errorf("failed to skip %s", err)
+		}
+		for {
+			_, err = hw.ReadPixel()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				t.Errorf("failed to read pixel: %s", err)
+			}
+			count++
+		}
+
+		if count != desiredCount {
+			t.Errorf("expected to read %d pixels but read %d with skip value of %d", desiredCount, count, skip)
+		}
+	})
 }
 
 // c Util function to return a byte array of and padded

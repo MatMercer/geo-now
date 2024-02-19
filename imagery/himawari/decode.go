@@ -26,7 +26,7 @@ type HMFile struct {
 	ImageData                io.ReadSeeker
 	cache                    io.Reader
 	readCount                int
-	totalReadCount           int
+	totalReadPixels          int
 	lastSize                 int
 	bufferSize               int
 }
@@ -445,17 +445,17 @@ func (f *HMFile) ReadPixel() (uint16, error) {
 	if err != nil {
 		return uint16(0), err
 	}
-	if f.totalReadCount == int(f.DataInfo.NumberOfColumns)*int(f.DataInfo.NumberOfLines) {
+	if f.totalReadPixels >= int(f.DataInfo.NumberOfColumns)*int(f.DataInfo.NumberOfLines) {
 		return uint16(0), io.EOF
 	}
 
 	f.readCount += 2
-	f.totalReadCount += 1
+	f.totalReadPixels += 1
 	return pix, nil
 }
 
 func (f *HMFile) updateCache() {
-	if f.readCount == f.lastSize {
+	if f.readCount >= f.lastSize {
 		buffer := make([]byte, f.bufferSize)
 		// TODO: handle error
 		n, _ := f.ImageData.Read(buffer)
@@ -467,6 +467,8 @@ func (f *HMFile) updateCache() {
 
 // Skip Skips N pixels
 func (f *HMFile) Skip(n int) error {
+	// Count how many pixels we skip
+	f.totalReadPixels += n
 	// We have 16 bytes per pixel, needs s*2 bytes
 	skipCount := 2 * n
 	// If we should skip the file or the cache
@@ -474,11 +476,12 @@ func (f *HMFile) Skip(n int) error {
 		// Skip the skip count - what we already will skip from the cache
 		skip := skipCount - (f.bufferSize - f.readCount)
 		io.CopyN(io.Discard, f.ImageData, int64(skip))
-		// Force an updated cache
-		f.readCount = skipCount
+		// Update the cache
+		f.readCount += skipCount
 		f.updateCache()
 	} else {
 		_, err := io.CopyN(io.Discard, f.cache, int64(skipCount))
+		f.readCount += skipCount
 		if err != nil {
 			return err
 		}
