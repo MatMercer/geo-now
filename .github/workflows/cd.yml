@@ -1,6 +1,7 @@
 name: Create artifact
 
 on:
+  pull_request:
   push:
     branches:
       - main
