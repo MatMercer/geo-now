@@ -21,7 +21,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - run: go install
+      - run: |
+          sudo apt-get install libvips-dev
+          go install
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
