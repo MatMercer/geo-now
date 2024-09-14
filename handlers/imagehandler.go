@@ -29,12 +29,22 @@ func ImageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+
+	// Get the source the client wants
 	srcName := parts[1]
 	src, err := imagery.GetSource(srcName, &imagery.Parameters{MaxWidth: config.DefaultConfig.MaxWidth})
 	if err != nil {
 		http.Error(w, "Invalid source", http.StatusBadRequest)
 		return
 	}
+
+	// Check if the client wants the max resolution and redirect to it
+	if parts[2] == "max" {
+		http.Redirect(w, r, src.SourceURL(), http.StatusFound)
+		return
+	}
+
+	// Parse the dimensions the client wants
 	dimensions := parts[2]
 	width, height, err := parseDimensions(dimensions)
 	if err != nil {
