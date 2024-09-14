@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/djherbis/buffer"
+	"github.com/djherbis/nio"
 	_ "net/http/pprof"
 )
 
@@ -86,6 +88,22 @@ type sectionDecode struct {
 }
 
 func decodeToFile(h *HMFile, d sectionDecode) error {
+	b := buffer.New(32 * 1024)
+	r, w := nio.Pipe(b)
+	defer w.Close()
+
+	// Open the file for writing
+	file, err := os.Create(fmt.Sprintf("section_%d.dat", h.SegmentInfo.SegmentSequenceNumber))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Start a goroutine to write to the file
+	go func() {
+		_, _ = io.Copy(file, r)
+	}()
+
 	// Start and End Y are the relative positions for the final image based in a section
 	section := h.SegmentInfo.SegmentSequenceNumber
 	startY := d.height * int(section-1)
@@ -95,9 +113,17 @@ func decodeToFile(h *HMFile, d sectionDecode) error {
 	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.width; x++ {
+			var pair [2]byte
+			_, err := h.ImageData.Read(pair[:])
+			if err != nil {
+				return err
+			}
+			p := uint16(pair[0]) | uint16(pair[1])<<8
+			data := byte(255 * (float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)))
+			w.Write([]byte{data})
+
 			// Do err and outside scan area logic
-			p, err := h.ReadPixel()
-			_ = byte(255 * (float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)))
+			//p, err := h.ReadPixel()
 			if err != nil {
 				return err
 			}
