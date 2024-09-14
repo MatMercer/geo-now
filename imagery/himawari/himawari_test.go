@@ -1,48 +1,57 @@
 package main
 
 import (
+	_ "net/http/pprof"
+)
+
+import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/jpeg"
 	"io"
 	"math"
+	"net/http"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestDecode(t *testing.T) {
+	// Profiling with pprof
+	var wg sync.WaitGroup
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+	wg.Add(1)
+
 	src := "HS_H09_20231130_0030_B03_FLDK_R05"
 	dir := "./sample-data"
 	sections, err := openFiles(dir, src)
-	downsample := 1
 	if err != nil {
 		fmt.Printf("Failed to open himawari sections: %s\n", err)
 		return
 	}
-	img, err := himawariDecode(sections, downsample)
+	_, err = himawariDecode(sections)
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
 		return
 	}
 
-	fileName := src + fmt.Sprintf("_T%d", time.Now().Unix()) + ".jpg"
-	fimg, _ := os.Create(fileName)
-	fmt.Printf("Saving to %s...\n", fileName)
-	err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
-	if err != nil {
-		panic(err)
-	}
-	if err = fimg.Close(); err != nil {
-		panic(err)
-	}
-
-	_ = exec.Command("explorer.exe", fileName).Run()
+	//fileName := src + fmt.Sprintf("_T%d", time.Now().Unix()) + ".jpg"
+	//fimg, _ := os.Create(fileName)
+	//fmt.Printf("Saving to %s...\n", fileName)
+	//err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
+	//if err != nil {
+	//	panic(err)
+	//}
+	//if err = fimg.Close(); err != nil {
+	//	panic(err)
+	//}
+	//
+	//_ = exec.Command("explorer.exe", fileName).Run()
+	wg.Wait()
 }
 
 // openFiles Returns a list of file sections sorted asc
@@ -76,6 +85,27 @@ type sectionDecode struct {
 	height int
 }
 
+func decodeToFile(h *HMFile, d sectionDecode) error {
+	// Start and End Y are the relative positions for the final image based in a section
+	section := h.SegmentInfo.SegmentSequenceNumber
+	startY := d.height * int(section-1)
+	endY := startY + d.height
+	// Amount of pixels for down sample skip
+	//skipPx := downsample - 1
+	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
+	for y := startY; y < endY; y++ {
+		for x := 0; x < d.width; x++ {
+			// Do err and outside scan area logic
+			p, err := h.ReadPixel()
+			_ = byte(255 * (float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func decodeSection(h *HMFile, d sectionDecode, img *image.RGBA) error {
 	// Start and End Y are the relative positions for the final image based in a section
 	section := h.SegmentInfo.SegmentSequenceNumber
@@ -96,7 +126,7 @@ func decodeSection(h *HMFile, d sectionDecode, img *image.RGBA) error {
 	return nil
 }
 
-func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, error) {
+func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 	defer func() {
 		for _, s := range sections {
 			_ = s.Close()
@@ -110,14 +140,15 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 		return nil, fmt.Errorf("failed to decode first section: %s", err)
 	}
 	totalSections := len(sections)
-	d := calculateScaling(firstSection, downsample)
-	img = image.NewRGBA(image.Rect(0, 0, d.width, d.height*totalSections))
+	d := decodeMetadata(firstSection)
+	//img = image.NewRGBA(image.Rect(0, 0, d.width, d.height*totalSections))
 	// Continue to other sections
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		decodeSection(firstSection, d, img)
+		//decodeSection(firstSection, d, img)
+		decodeToFile(firstSection, d)
 	}()
 	for section := 1; section < totalSections; section++ {
 		wg.Add(1)
@@ -125,7 +156,8 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 		go func(f io.ReadSeeker) {
 			defer wg.Done()
 			h, err := DecodeFile(f)
-			err = decodeSection(h, d, img)
+			//err = decodeSection(h, d, img)
+			decodeToFile(h, d)
 			// TODO: err check
 			if err != nil {
 				//return nil, err
@@ -134,10 +166,11 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 	}
 	wg.Wait()
 
+	fmt.Printf("Decoding done for %d sections\n", totalSections)
 	return img, nil
 }
 
-func calculateScaling(h *HMFile, downsample int) sectionDecode {
+func decodeMetadata(h *HMFile) sectionDecode {
 	d := sectionDecode{
 		width:  int(h.DataInfo.NumberOfColumns),
 		height: int(h.DataInfo.NumberOfLines),

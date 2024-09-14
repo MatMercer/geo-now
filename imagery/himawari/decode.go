@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"io"
@@ -23,12 +24,13 @@ type HMFile struct {
 	ObservationTimeInfo      ObservationTimeInformationBlock
 	ErrorInfo                ErrorInformationBlock
 	SpareInfo                SpareInformationBlock
-	ImageData                io.ReadSeeker
+	ImageData                io.Reader
 	cache                    io.Reader
 	readCount                int
 	totalReadPixels          int
 	lastSize                 int
-	bufferSize               int
+	// deprecated
+	bufferSize int
 }
 
 type Position struct {
@@ -423,8 +425,9 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 		SpareInfo:                sp,
 	}
 
-	// Pass the reader ahead, rest of the file is image data
-	h.ImageData = r
+	// Create a buffered reader with a maximum buffer size of 50MB
+	bufferedReader := bufio.NewReaderSize(r, 8*1024*1024)
+	h.ImageData = bufferedReader
 
 	// Default values
 	h.bufferSize = 10000 * 2 // 20k pixels
@@ -438,10 +441,8 @@ func read(f io.Reader, o binary.ByteOrder, dst any) {
 }
 
 func (f *HMFile) ReadPixel() (uint16, error) {
-	f.updateCache()
-
 	var pix uint16
-	err := binary.Read(f.cache, f.BasicInfo.ByteOrder, &pix)
+	err := binary.Read(f.ImageData, f.BasicInfo.ByteOrder, &pix)
 	if err != nil {
 		return uint16(0), err
 	}
@@ -459,6 +460,7 @@ func (f *HMFile) updateCache() {
 		buffer := make([]byte, f.bufferSize)
 		// TODO: handle error
 		n, _ := f.ImageData.Read(buffer)
+
 		f.lastSize = n
 		f.readCount = 0
 		f.cache = bytes.NewReader(buffer)
