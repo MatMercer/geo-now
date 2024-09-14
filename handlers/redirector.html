@@ -1,0 +1,27 @@
+<html lang="en">
+<head>
+    <title>GeoNow - Redirecting...</title>
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 16px;
+            font-family: sans-serif;
+            font-weight: normal !important;
+        }
+    </style>
+</head>
+<body>
+<h1>Redirecting to <span id="resolution"></span> image...</h1>
+<!-- Simple redirector to detect device size -->
+<script>
+    var ratio = window.devicePixelRatio || 1;
+    var width = Math.floor(screen.width * ratio);
+    var height = Math.floor(screen.height * ratio);
+    var resolution = width + "x" + height;
+    var newLoc = (window.location + "").replace("/r", "/goes/" + resolution);
+    document.getElementById("resolution").innerText = resolution;
+    window.location.replace(newLoc);
+</script>
+</body>
+</html>

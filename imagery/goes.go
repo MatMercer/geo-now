@@ -53,3 +53,7 @@ func (g GoesSource) PostProcess(src io.Reader, dst io.Writer) error {
 
 	return nil
 }
+
+func (g GoesSource) SourceURL() string {
+	return host + eastGeocolor
+}

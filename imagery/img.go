@@ -12,6 +12,8 @@ type ImageSource interface {
 	// PostProcess Can be used to clean an image, expects that dst is written somewhere
 	// src and dst are file paths
 	PostProcess(src io.Reader, dst io.Writer) error
+	// SourceURL Returns the raw source URL for the image, useful when we don't want to server the image ourselves
+	SourceURL() string
 }
 
 type Parameters struct {
