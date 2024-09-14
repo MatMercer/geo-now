@@ -72,23 +72,20 @@ func openFiles(dir string, pattern string) ([]io.ReadSeekCloser, error) {
 
 // Aux struct to store decode metadata
 type sectionDecode struct {
-	width        int
-	height       int
-	downsample   int
-	scale        float64
-	scaledWidth  int
-	scaledHeight int
+	width  int
+	height int
 }
 
 func decodeSection(h *HMFile, d sectionDecode, img *image.RGBA) error {
 	// Start and End Y are the relative positions for the final image based in a section
-	startY := d.scaledHeight * int(h.SegmentInfo.SegmentSequenceNumber-1)
-	endY := startY + d.scaledHeight
+	section := h.SegmentInfo.SegmentSequenceNumber
+	startY := d.height * int(section-1)
+	endY := startY + d.height
 	// Amount of pixels for down sample skip
 	//skipPx := downsample - 1
-	fmt.Printf("Decoding %dx%d from y %d-%d\n", d.width, d.height, startY, endY)
+	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
 	for y := startY; y < endY; y++ {
-		for x := 0; x < d.scaledWidth; x++ {
+		for x := 0; x < d.width; x++ {
 			// Do err and outside scan area logic
 			err := readPixel(h, img, x, y)
 			if err != nil {
@@ -114,7 +111,7 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 	}
 	totalSections := len(sections)
 	d := calculateScaling(firstSection, downsample)
-	img = image.NewRGBA(image.Rect(0, 0, d.scaledWidth, d.scaledHeight*totalSections))
+	img = image.NewRGBA(image.Rect(0, 0, d.width, d.height*totalSections))
 	// Continue to other sections
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -142,13 +139,9 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 
 func calculateScaling(h *HMFile, downsample int) sectionDecode {
 	d := sectionDecode{
-		width:      int(h.DataInfo.NumberOfColumns),
-		height:     int(h.DataInfo.NumberOfLines),
-		downsample: downsample,
-		scale:      1.0 / float64(downsample),
+		width:  int(h.DataInfo.NumberOfColumns),
+		height: int(h.DataInfo.NumberOfLines),
 	}
-	d.scaledWidth = int(d.scale * float64(d.width))
-	d.scaledHeight = int(d.scale * float64(d.height))
 
 	return d
 }
