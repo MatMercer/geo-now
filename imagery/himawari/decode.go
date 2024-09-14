@@ -440,19 +440,20 @@ func read(f io.Reader, o binary.ByteOrder, dst any) {
 	_ = binary.Read(f, o, dst)
 }
 
-func (f *HMFile) ReadPixel() (uint16, error) {
-	var pix uint16
-	err := binary.Read(f.ImageData, f.BasicInfo.ByteOrder, &pix)
+func (f *HMFile) ReadPixel(pix *uint16) error {
+	err := binary.Read(f.ImageData, f.BasicInfo.ByteOrder, pix)
 	if err != nil {
-		return uint16(0), err
+		*pix = 0
+		return err
 	}
 	if f.totalReadPixels >= int(f.DataInfo.NumberOfColumns)*int(f.DataInfo.NumberOfLines) {
-		return uint16(0), io.EOF
+		*pix = 0
+		return io.EOF
 	}
 
 	f.readCount += 2
 	f.totalReadPixels += 1
-	return pix, nil
+	return nil
 }
 
 func (f *HMFile) updateCache() {

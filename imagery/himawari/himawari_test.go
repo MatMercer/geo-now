@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/binary"
 	"github.com/djherbis/buffer"
 	"github.com/djherbis/nio"
 	_ "net/http/pprof"
@@ -89,11 +91,12 @@ type sectionDecode struct {
 
 func decodeToFile(h *HMFile, d sectionDecode) error {
 	b := buffer.New(32 * 1024)
-	r, w := nio.Pipe(b)
-	defer w.Close()
+	r, pw := nio.Pipe(b)
+	w := bufio.NewWriter(pw)
+	defer pw.Close()
 
 	// Open the file for writing
-	file, err := os.Create(fmt.Sprintf("section_%d.dat", h.SegmentInfo.SegmentSequenceNumber))
+	file, err := os.Create(fmt.Sprintf("section_%d.bmp", h.SegmentInfo.SegmentSequenceNumber))
 	if err != nil {
 		return err
 	}
@@ -108,30 +111,77 @@ func decodeToFile(h *HMFile, d sectionDecode) error {
 	section := h.SegmentInfo.SegmentSequenceNumber
 	startY := d.height * int(section-1)
 	endY := startY + d.height
-	// Amount of pixels for down sample skip
-	//skipPx := downsample - 1
+
+	// Bits per pixel
+	bitsPerPixel := 8
+
+	// Calculate row size and padding
+	rowSize := ((bitsPerPixel*d.width + 31) / 32) * 4
+	padding := rowSize - d.width
+
+	// Write BMP header
+	writeBMPHeader(w, d.width, d.height, bitsPerPixel)
+
 	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
-	var pair [2]byte
-	var pixelData [1]byte
+	var curPixel = uint16(0)
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.width; x++ {
-			_, err := h.ImageData.Read(pair[:])
+			// Do err and outside scan area logic
+			err := h.ReadPixel(&curPixel)
 			if err != nil {
 				return err
 			}
-			p := uint16(pair[0]) | uint16(pair[1])<<8
-			data := byte(255 * (float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)))
-			pixelData[0] = data
-			w.Write(pixelData[:])
+			// Get a number between 0 and 1 from max number of pixels
+			// different bands has different number of pixels bits, e.g., band 03 has 11
+			coef := float64(curPixel) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
+			brig := 1.0
+			finalPixel := byte(math.Min(coef*255*brig, 255))
+			w.WriteByte(finalPixel)
 
-			// Do err and outside scan area logic
-			//p, err := h.ReadPixel()
-			if err != nil {
-				return err
+			// Pad row to multiple of 4 bytes
+			for x := 0; x < padding; x++ {
+				err = w.WriteByte(0)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 	}
 	return nil
+}
+
+func writeBMPHeader(w *bufio.Writer, width, height, bitsPerPixel int) {
+	// Calculate row size and image size
+	rowSize := ((bitsPerPixel*width + 31) / 32) * 4
+	imageSize := rowSize * height
+	fileSize := 14 + 40 + 1024 + imageSize // File header + Info header + Palette + Image data
+
+	// File header (14 bytes)
+	w.Write([]byte{'B', 'M'})                                // Signature
+	binary.Write(w, binary.LittleEndian, uint32(fileSize))   // File size
+	binary.Write(w, binary.LittleEndian, uint32(0))          // Reserved
+	binary.Write(w, binary.LittleEndian, uint32(14+40+1024)) // Offset to pixel data
+
+	// Image header (40 bytes)
+	binary.Write(w, binary.LittleEndian, uint32(40))           // Header size
+	binary.Write(w, binary.LittleEndian, int32(width))         // Image width
+	binary.Write(w, binary.LittleEndian, int32(height))        // Image height
+	binary.Write(w, binary.LittleEndian, uint16(1))            // Number of color planes
+	binary.Write(w, binary.LittleEndian, uint16(bitsPerPixel)) // Bits per pixel
+	binary.Write(w, binary.LittleEndian, uint32(0))            // No compression
+	binary.Write(w, binary.LittleEndian, uint32(imageSize))    // Image size
+	binary.Write(w, binary.LittleEndian, int32(2835))          // X pixels per meter (72 DPI)
+	binary.Write(w, binary.LittleEndian, int32(2835))          // Y pixels per meter (72 DPI)
+	binary.Write(w, binary.LittleEndian, uint32(256))          // Number of colors in palette
+	binary.Write(w, binary.LittleEndian, uint32(0))            // All colors are important
+
+	// Color palette (256 * 4 = 1024 bytes)
+	for i := 0; i < 256; i++ {
+		w.WriteByte(uint8(i)) // Blue
+		w.WriteByte(uint8(i)) // Green
+		w.WriteByte(uint8(i)) // Red
+		w.WriteByte(0)        // Reserved
+	}
 }
 
 func decodeSection(h *HMFile, d sectionDecode, img *image.RGBA) error {
@@ -208,7 +258,8 @@ func decodeMetadata(h *HMFile) sectionDecode {
 }
 
 func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
-	data, err := h.ReadPixel()
+	var data uint16
+	err := h.ReadPixel(&data)
 	if err != nil {
 		return fmt.Errorf("failed to read pixel at %d:%d: %s", x, y, err)
 	}
@@ -219,8 +270,9 @@ func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
 
 	// Get a number between 0 and 1 from max number of pixels
 	// different bands has different number of pixels bits, e.g., band 03 has 11
+	brig := 1.0
 	coef := float64(data) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
-	pc := pixel(coef, 1)
+	pc := int(math.Min(coef*255*brig, 255))
 	img.Set(x, y, color.RGBA{R: uint8(pc), G: uint8(pc), B: uint8(pc), A: 255})
 
 	return nil

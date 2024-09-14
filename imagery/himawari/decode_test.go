@@ -220,14 +220,15 @@ func TestReadPixel(t *testing.T) {
 		t.Error(err)
 	}
 	hw, err := DecodeFile(f)
-	px, _ := hw.ReadPixel()
+	var px uint16
+	_ = hw.ReadPixel(&px)
 	if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
 		t.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
 	}
 	count := 1
 	desiredCount := 11000 * 1100
 	for {
-		_, err = hw.ReadPixel()
+		err = hw.ReadPixel(&px)
 		if err == io.EOF {
 			break
 		}
@@ -260,7 +261,8 @@ func BenchmarkHMFile_ReadPixel(b *testing.B) {
 			hw, err := DecodeFile(f)
 			// Overwrite buffer size
 			hw.bufferSize = v.bufferSize
-			px, _ := hw.ReadPixel()
+			var px uint16
+			_ = hw.ReadPixel(&px)
 			if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
 				b.Errorf("expected %d but got %d for first pixel", hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea, px)
 			}
@@ -269,7 +271,7 @@ func BenchmarkHMFile_ReadPixel(b *testing.B) {
 				if count > b.N {
 					break
 				}
-				_, err = hw.ReadPixel()
+				err = hw.ReadPixel(&px)
 				if err == io.EOF {
 					break
 				}
