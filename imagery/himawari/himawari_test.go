@@ -12,10 +12,11 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 )
 
-func main() {
+func TestDecode(t *testing.T) {
 	src := "HS_H09_20231130_0030_B03_FLDK_R05"
 	dir := "./sample-data"
 	sections, err := openFiles(dir, src)
@@ -79,12 +80,12 @@ type sectionDecode struct {
 	scaledHeight int
 }
 
-func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) error {
+func decodeSection(h *HMFile, d sectionDecode, img *image.RGBA) error {
 	// Start and End Y are the relative positions for the final image based in a section
 	startY := d.scaledHeight * int(h.SegmentInfo.SegmentSequenceNumber-1)
 	endY := startY + d.scaledHeight
 	// Amount of pixels for down sample skip
-	skipPx := downsample - 1
+	//skipPx := downsample - 1
 	fmt.Printf("Decoding %dx%d from y %d-%d\n", d.width, d.height, startY, endY)
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.scaledWidth; x++ {
@@ -93,14 +94,6 @@ func decodeSection(h *HMFile, downsample int, d sectionDecode, img *image.RGBA) 
 			if err != nil {
 				return err
 			}
-			err = h.Skip(skipPx)
-			if err != nil {
-				return fmt.Errorf("failed to skip %d pixels at %d:%d: %s skipPx", skipPx, x, y, err)
-			}
-		}
-		err := h.Skip(d.width * skipPx)
-		if err != nil {
-			return fmt.Errorf("failed to skip %d pixels at %d:%d: %s skipPx", skipPx, 0, y, err)
 		}
 	}
 	return nil
@@ -127,7 +120,7 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		decodeSection(firstSection, downsample, d, img)
+		decodeSection(firstSection, d, img)
 	}()
 	for section := 1; section < totalSections; section++ {
 		wg.Add(1)
@@ -135,7 +128,7 @@ func himawariDecode(sections []io.ReadSeekCloser, downsample int) (*image.RGBA, 
 		go func(f io.ReadSeeker) {
 			defer wg.Done()
 			h, err := DecodeFile(f)
-			err = decodeSection(h, downsample, d, img)
+			err = decodeSection(h, d, img)
 			// TODO: err check
 			if err != nil {
 				//return nil, err

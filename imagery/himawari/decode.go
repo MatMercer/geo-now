@@ -464,28 +464,3 @@ func (f *HMFile) updateCache() {
 		f.cache = bytes.NewReader(buffer)
 	}
 }
-
-// Skip Skips N pixels
-func (f *HMFile) Skip(n int) error {
-	// Count how many pixels we skip
-	f.totalReadPixels += n
-	// We have 16 bytes per pixel, needs s*2 bytes
-	skipCount := 2 * n
-	// If we should skip the file or the cache
-	if f.bufferSize-f.readCount <= skipCount {
-		// Skip the skip count - what we already will skip from the cache
-		skip := skipCount - (f.bufferSize - f.readCount)
-		io.CopyN(io.Discard, f.ImageData, int64(skip))
-		// Update the cache
-		f.readCount += skipCount
-		f.updateCache()
-	} else {
-		_, err := io.CopyN(io.Discard, f.cache, int64(skipCount))
-		f.readCount += skipCount
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
