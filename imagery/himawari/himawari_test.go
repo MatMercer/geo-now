@@ -111,16 +111,18 @@ func decodeToFile(h *HMFile, d sectionDecode) error {
 	// Amount of pixels for down sample skip
 	//skipPx := downsample - 1
 	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
+	var pair [2]byte
+	var pixelData [1]byte
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.width; x++ {
-			var pair [2]byte
 			_, err := h.ImageData.Read(pair[:])
 			if err != nil {
 				return err
 			}
 			p := uint16(pair[0]) | uint16(pair[1])<<8
 			data := byte(255 * (float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)))
-			w.Write([]byte{data})
+			pixelData[0] = data
+			w.Write(pixelData[:])
 
 			// Do err and outside scan area logic
 			//p, err := h.ReadPixel()
