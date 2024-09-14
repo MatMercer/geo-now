@@ -90,7 +90,7 @@ type sectionDecode struct {
 }
 
 func decodeToFile(h *HMFile, d sectionDecode) error {
-	b := buffer.New(32 * 1024)
+	b := buffer.New(16 * 1024 * 1024)
 	r, pw := nio.Pipe(b)
 	w := bufio.NewWriter(pw)
 	defer pw.Close()
@@ -123,20 +123,27 @@ func decodeToFile(h *HMFile, d sectionDecode) error {
 	writeBMPHeader(w, d.width, d.height, bitsPerPixel)
 
 	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
-	var curPixel = uint16(0)
+	var pair [2]byte
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.width; x++ {
-			// Do err and outside scan area logic
-			err := h.ReadPixel(&curPixel)
+			_, err := h.ImageData.Read(pair[:])
 			if err != nil {
 				return err
 			}
-			// Get a number between 0 and 1 from max number of pixels
-			// different bands has different number of pixels bits, e.g., band 03 has 11
-			coef := float64(curPixel) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
-			brig := 1.0
-			finalPixel := byte(math.Min(coef*255*brig, 255))
-			w.WriteByte(finalPixel)
+			// TODO check endianess
+			p := uint16(pair[0]) | uint16(pair[1])<<8
+
+			// Do err and outside scan area logic
+			if p == h.CalibrationInfo.CountValueOfPixelsOutsideScanArea || p == h.CalibrationInfo.CountValueOfErrorPixels {
+				w.WriteByte(0)
+			} else {
+				// Get a number between 0 and 1 from max number of pixels
+				// Different bands has different number of pixels bits, e.g., band 03 has 11
+				coef := float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
+				brig := 1.0
+				finalPixel := byte(math.Min(coef*255*brig, 255))
+				w.WriteByte(finalPixel)
+			}
 
 			// Pad row to multiple of 4 bytes
 			for x := 0; x < padding; x++ {

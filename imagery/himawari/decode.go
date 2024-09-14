@@ -425,8 +425,8 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 		SpareInfo:                sp,
 	}
 
-	// Create a buffered reader with a maximum buffer size of 50MB
-	bufferedReader := bufio.NewReaderSize(r, 8*1024*1024)
+	// Create a buffered reader with a maximum buffer size of 16
+	bufferedReader := bufio.NewReaderSize(r, 16*1024*1024)
 	h.ImageData = bufferedReader
 
 	// Default values
