@@ -87,11 +87,13 @@ func ImageHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Failed to open latest image: %s", err)
 			http.Error(w, "Failed to post process image", http.StatusInternalServerError)
+			return
 		}
 		dstImg, err := os.Create(imagePath(srcName, "latest-clean.jpg"))
 		if err != nil {
 			log.Printf("Failed to create dst image: %s", err)
 			http.Error(w, "Failed to post process image", http.StatusInternalServerError)
+			return
 		}
 		err = src.PostProcess(srcImg, dstImg)
 		if err != nil {
