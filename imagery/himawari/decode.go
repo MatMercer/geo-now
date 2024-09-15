@@ -12,6 +12,12 @@ const (
 	BigEndian    = 1
 )
 
+type DecodeInstructions struct {
+	Decimate     int
+	TargetWidth  int
+	TargetHeight int
+}
+
 type HMFile struct {
 	BasicInfo                BasicInformation
 	DataInfo                 DataInformationBlock
@@ -25,10 +31,18 @@ type HMFile struct {
 	ErrorInfo                ErrorInformationBlock
 	SpareInfo                SpareInformationBlock
 	ImageData                io.Reader
-	cache                    io.Reader
-	readCount                int
-	totalReadPixels          int
-	lastSize                 int
+
+	// DecodeInstructions Additional metadata about how to decode the image
+	DecodeInstructions DecodeInstructions
+
+	// deprecated
+	cache io.Reader
+	// deprecated
+	readCount int
+	// deprecated
+	totalReadPixels int
+	// deprecated
+	lastSize int
 	// deprecated
 	bufferSize int
 }
@@ -431,6 +445,17 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 
 	// Default values
 	h.bufferSize = 10000 * 2 // 20k pixels
+
+	// Band 03 has 22000 pixel resolution, but we don't need it, so we pick half
+	decimate := 1
+	if h.CalibrationInfo.BandNumber == 3 {
+		decimate = 2
+	}
+	h.DecodeInstructions = DecodeInstructions{
+		Decimate:     decimate,
+		TargetWidth:  int(h.DataInfo.NumberOfColumns) / decimate,
+		TargetHeight: int(h.DataInfo.NumberOfLines) / decimate,
+	}
 
 	return h, nil
 }

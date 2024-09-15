@@ -89,7 +89,7 @@ type sectionDecode struct {
 	height int
 }
 
-func decodeToFile(h *HMFile, d sectionDecode) error {
+func decodeToFile(h *HMFile) error {
 	b := buffer.New(16 * 1024 * 1024)
 	r, pw := nio.Pipe(b)
 	w := bufio.NewWriter(pw)
@@ -107,25 +107,29 @@ func decodeToFile(h *HMFile, d sectionDecode) error {
 		_, _ = io.Copy(file, r)
 	}()
 
+	// Get the decode info
+	d := h.DecodeInstructions
+
 	// Start and End Y are the relative positions for the final image based in a section
 	section := h.SegmentInfo.SegmentSequenceNumber
-	startY := d.height * int(section-1)
-	endY := startY + d.height
+	startY := d.TargetHeight * int(section-1)
+	endY := startY + d.TargetHeight
 
 	// Bits per pixel
 	bitsPerPixel := 8
 
 	// Calculate row size and padding
-	rowSize := ((bitsPerPixel*d.width + 31) / 32) * 4
-	padding := rowSize - d.width
+	rowSize := ((bitsPerPixel*d.TargetWidth + 31) / 32) * 4
+	padding := rowSize - d.TargetWidth
 
 	// Write BMP header
-	writeBMPHeader(w, d.width, d.height, bitsPerPixel)
+	writeBMPHeader(w, d.TargetWidth, d.TargetHeight, bitsPerPixel)
 
-	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
+	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.TargetWidth, d.TargetHeight, startY, endY)
 	var pair [2]byte
+
 	for y := startY; y < endY; y++ {
-		for x := 0; x < d.width; x++ {
+		for x := 0; x < d.TargetWidth; x++ {
 			_, err := h.ImageData.Read(pair[:])
 			if err != nil {
 				return err
@@ -152,6 +156,15 @@ func decodeToFile(h *HMFile, d sectionDecode) error {
 					panic(err)
 				}
 			}
+
+			// Decimate the columns
+			for i := 0; i < h.DecodeInstructions.Decimate-1; i++ {
+				_, err = h.ImageData.Read(pair[:])
+			}
+		}
+		// Decimate the lines
+		for i := 0; i < h.DecodeInstructions.Decimate-1; i++ {
+			io.CopyN(io.Discard, h.ImageData, int64(2*h.DataInfo.NumberOfColumns))
 		}
 	}
 	return nil
@@ -191,16 +204,18 @@ func writeBMPHeader(w *bufio.Writer, width, height, bitsPerPixel int) {
 	}
 }
 
-func decodeSection(h *HMFile, d sectionDecode, img *image.RGBA) error {
+// decodeSection deprecated
+func decodeSection(h *HMFile, img *image.RGBA) error {
 	// Start and End Y are the relative positions for the final image based in a section
 	section := h.SegmentInfo.SegmentSequenceNumber
-	startY := d.height * int(section-1)
-	endY := startY + d.height
+	d := h.DecodeInstructions
+	startY := d.TargetHeight * int(section-1)
+	endY := startY + d.TargetWidth
 	// Amount of pixels for down sample skip
 	//skipPx := downsample - 1
-	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.width, d.height, startY, endY)
+	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.TargetWidth, d.TargetHeight, startY, endY)
 	for y := startY; y < endY; y++ {
-		for x := 0; x < d.width; x++ {
+		for x := 0; x < d.TargetWidth; x++ {
 			// Do err and outside scan area logic
 			err := readPixel(h, img, x, y)
 			if err != nil {
@@ -225,7 +240,7 @@ func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 		return nil, fmt.Errorf("failed to decode first section: %s", err)
 	}
 	totalSections := len(sections)
-	d := decodeMetadata(firstSection)
+	//d := decodeMetadata(firstSection)
 	//img = image.NewRGBA(image.Rect(0, 0, d.width, d.height*totalSections))
 	// Continue to other sections
 	var wg sync.WaitGroup
@@ -233,7 +248,7 @@ func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 	go func() {
 		defer wg.Done()
 		//decodeSection(firstSection, d, img)
-		decodeToFile(firstSection, d)
+		decodeToFile(firstSection)
 	}()
 	for section := 1; section < totalSections; section++ {
 		wg.Add(1)
@@ -242,7 +257,7 @@ func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 			defer wg.Done()
 			h, err := DecodeFile(f)
 			//err = decodeSection(h, d, img)
-			decodeToFile(h, d)
+			decodeToFile(h)
 			// TODO: err check
 			if err != nil {
 				//return nil, err
@@ -255,6 +270,7 @@ func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 	return img, nil
 }
 
+// decodeMetadata deprecated
 func decodeMetadata(h *HMFile) sectionDecode {
 	d := sectionDecode{
 		width:  int(h.DataInfo.NumberOfColumns),
@@ -264,6 +280,7 @@ func decodeMetadata(h *HMFile) sectionDecode {
 	return d
 }
 
+// deprecated
 func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
 	var data uint16
 	err := h.ReadPixel(&data)
@@ -285,7 +302,7 @@ func readPixel(h *HMFile, img *image.RGBA, x int, y int) error {
 	return nil
 }
 
-// pixel Returns 255*coef clamping at coef, brightness adjusted
+// pixel deprecated Returns 255*coef clamping at coef, brightness adjusted
 func pixel(coef, brig float64) int {
 	return int(math.Min(coef*255*brig, 255))
 }
