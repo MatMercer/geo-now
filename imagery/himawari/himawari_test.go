@@ -23,6 +23,54 @@ import (
 	"testing"
 )
 
+func TestDecodeMultiBand(t *testing.T) {
+	// Profiling with pprof
+	var wg sync.WaitGroup
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+	wg.Add(1)
+
+	// B01 - 470
+	// B02 - 510
+	// B03 - 640
+	var bandsToDecode = []int{1, 2, 3}
+
+	files := make(map[int][]io.ReadSeekCloser)
+
+	for _, band := range bandsToDecode {
+		src := fmt.Sprintf("HS_H09_20231130_0030_B%02d_FLDK", band)
+		dir := "./sample-data"
+		sections, err := openFiles(dir, src)
+		if err != nil {
+			fmt.Printf("Failed to open himawari sections: %s\n", err)
+			return
+		}
+
+		files[band] = sections
+	}
+
+	_, err := himawariDecodeMultiband(files)
+	if err != nil {
+		fmt.Printf("Failed to decode file: %s\n", err)
+		return
+	}
+
+	//fileName := src + fmt.Sprintf("_T%d", time.Now().Unix()) + ".jpg"
+	//fimg, _ := os.Create(fileName)
+	//fmt.Printf("Saving to %s...\n", fileName)
+	//err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
+	//if err != nil {
+	//	panic(err)
+	//}
+	//if err = fimg.Close(); err != nil {
+	//	panic(err)
+	//}
+	//
+	//_ = exec.Command("explorer.exe", fileName).Run()
+	wg.Wait()
+}
+
 func TestDecode(t *testing.T) {
 	// Profiling with pprof
 	var wg sync.WaitGroup
@@ -92,6 +140,134 @@ func openFiles(dir string, pattern string) ([]io.ReadSeekCloser, error) {
 type sectionDecode struct {
 	width  int
 	height int
+}
+
+type HMDecode struct {
+	*HMFile
+	colR float64
+	colG float64
+	colB float64
+}
+
+func (h *HMDecode) Init() error {
+	waveLength, err := GetWaveLength(int(h.CalibrationInfo.BandNumber))
+	colR, colG, colB, err := colometry.ToRGB(waveLength)
+	if err != nil {
+		return err
+	}
+
+	h.colR = colR
+	h.colG = colG
+	h.colB = colB
+
+	return nil
+}
+
+func (h *HMDecode) DecimateCols(pair [2]byte) {
+	// Decimate the columns
+	for i := 0; i < h.DecodeInstructions.Decimate-1; i++ {
+		_, _ = h.ImageData.Read(pair[:])
+	}
+}
+
+func (h *HMDecode) DecimateLines() {
+	// Decimate the lines
+	for i := 0; i < h.DecodeInstructions.Decimate-1; i++ {
+		io.CopyN(io.Discard, h.ImageData, int64(2*h.DataInfo.NumberOfColumns))
+	}
+}
+
+func (h *HMDecode) NextPixel(pair [2]byte) (r, g, b float64, err error) {
+	_, err = h.ImageData.Read(pair[:])
+	if err != nil {
+		return 0., 0., 0., err
+	}
+	// TODO check endianess
+	p := uint16(pair[0]) | uint16(pair[1])<<8
+
+	// Do err and outside scan area logic
+	if p == h.CalibrationInfo.CountValueOfPixelsOutsideScanArea || p == h.CalibrationInfo.CountValueOfErrorPixels {
+		return 0., 0., 0., nil
+	} else {
+		// Get a number between 0 and 1 from max number of pixels
+		// Different bands has different number of pixels bits, e.g., band 03 has 11
+		coef := float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
+		brig := 1.0
+		finalR := h.colR * coef * brig
+		finalG := h.colG * coef * brig
+		finalB := h.colB * coef * brig
+
+		// Bitmaps uses BGR
+		return finalR, finalG, finalB, nil
+	}
+}
+
+func decodeToFileMultiband(files []*HMDecode) error {
+	b := buffer.New(16 * 1024 * 1024)
+	r, pw := nio.Pipe(b)
+	w := bufio.NewWriter(pw)
+	defer pw.Close()
+
+	// Open the file for writing
+	file, err := os.Create(fmt.Sprintf("section_%d.bmp", files[0].SegmentInfo.SegmentSequenceNumber))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Start a goroutine to write to the file
+	go func() {
+		_, _ = io.Copy(file, r)
+	}()
+
+	// Get the decode info
+	d := files[0].DecodeInstructions
+
+	// Start and End Y are the relative positions for the final image based in a section
+	section := files[0].SegmentInfo.SegmentSequenceNumber
+	startY := d.TargetHeight * int(section-1)
+	endY := startY + d.TargetHeight
+
+	// Bits per pixel
+	bitsPerPixel := 24
+
+	// Write BMP header
+	writeBMPHeader(w, d.TargetWidth, d.TargetHeight, bitsPerPixel)
+
+	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.TargetWidth, d.TargetHeight, startY, endY)
+	var pair [2]byte
+
+	for y := startY; y < endY; y++ {
+		for x := 0; x < d.TargetWidth; x++ {
+			var finalR, finalG, finalB float64
+			for _, h := range files {
+				r, g, b, err := h.NextPixel(pair)
+				if err != nil {
+					return err
+				}
+
+				finalR += r
+				finalG += g
+				finalB += b
+
+				// Decimate the columns
+				h.DecimateCols(pair)
+			}
+
+			finalR /= float64(len(files))
+			finalG /= float64(len(files))
+			finalB /= float64(len(files))
+
+			// Bitmaps uses BGR
+			pixel := []byte{byte(math.Min(finalB*255, 255)), byte(math.Min(finalG*255, 255)), byte(math.Min(finalR*255, 255))}
+			w.Write(pixel)
+		}
+		// Decimate the lines
+		for _, h := range files {
+			h.DecimateLines()
+		}
+	}
+	return nil
 }
 
 func decodeToFile(h *HMFile) error {
@@ -224,6 +400,56 @@ func decodeSection(h *HMFile, img *image.RGBA) error {
 		}
 	}
 	return nil
+}
+
+func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, error) {
+	// Close all files
+	defer func() {
+		for _, sections := range bands {
+			for _, s := range sections {
+				_ = s.Close()
+			}
+		}
+	}()
+
+	// Map between section number and himawari file (for visible light it's 3)
+	himawariFiles := make(map[int][]*HMFile)
+	for _, sections := range bands {
+		for _, s := range sections {
+			hw, err := DecodeFile(s)
+			if err != nil {
+				return nil, err
+			}
+			himawariFiles[int(hw.SegmentInfo.SegmentSequenceNumber)] = append(himawariFiles[int(hw.SegmentInfo.SegmentSequenceNumber)], hw)
+		}
+	}
+
+	var img *image.RGBA
+
+	var wg sync.WaitGroup
+	// TODO pass section number to decode to make life easier later
+	for _, files := range himawariFiles {
+		wg.Add(1)
+		go func(files []*HMFile) {
+			defer wg.Done()
+
+			decodes := make([]*HMDecode, len(files))
+			for i, f := range files {
+				decodes[i] = &HMDecode{HMFile: f}
+				err := decodes[i].Init()
+				if err != nil {
+					fmt.Printf("Failed to init decode: %s\n", err)
+					return
+				}
+			}
+
+			decodeToFileMultiband(decodes)
+		}(files)
+	}
+	wg.Wait()
+
+	fmt.Printf("Decoding done for %d sections\n", len(himawariFiles))
+	return img, nil
 }
 
 func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
