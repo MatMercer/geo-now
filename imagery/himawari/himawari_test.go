@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"github.com/djherbis/buffer"
 	"github.com/djherbis/nio"
+	"matbm.net/geonow/imagery/colometry"
 	_ "net/http/pprof"
 )
 
@@ -30,7 +31,11 @@ func TestDecode(t *testing.T) {
 	}()
 	wg.Add(1)
 
-	src := "HS_H09_20231130_0030_B03_FLDK_R05"
+	// B01 - 470
+	// B02 - 510
+	// B03 - 640
+
+	src := "HS_H09_20231130_0030_B01_FLDK_R10"
 	dir := "./sample-data"
 	sections, err := openFiles(dir, src)
 	if err != nil {
@@ -116,17 +121,22 @@ func decodeToFile(h *HMFile) error {
 	endY := startY + d.TargetHeight
 
 	// Bits per pixel
-	bitsPerPixel := 8
-
-	// Calculate row size and padding
-	rowSize := ((bitsPerPixel*d.TargetWidth + 31) / 32) * 4
-	padding := rowSize - d.TargetWidth
+	bitsPerPixel := 24
 
 	// Write BMP header
 	writeBMPHeader(w, d.TargetWidth, d.TargetHeight, bitsPerPixel)
 
 	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.TargetWidth, d.TargetHeight, startY, endY)
 	var pair [2]byte
+
+	waveLength, err := GetWaveLength(int(h.CalibrationInfo.BandNumber))
+	colR, colG, colB, err := colometry.ToRGB(waveLength)
+	if err != nil {
+		return err
+	}
+
+	blackPixel := []byte{0, 0, 0}
+	var outPixel []byte
 
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.TargetWidth; x++ {
@@ -139,22 +149,20 @@ func decodeToFile(h *HMFile) error {
 
 			// Do err and outside scan area logic
 			if p == h.CalibrationInfo.CountValueOfPixelsOutsideScanArea || p == h.CalibrationInfo.CountValueOfErrorPixels {
-				w.WriteByte(0)
+				w.Write(blackPixel)
 			} else {
 				// Get a number between 0 and 1 from max number of pixels
 				// Different bands has different number of pixels bits, e.g., band 03 has 11
 				coef := float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
 				brig := 1.0
-				finalPixel := byte(math.Min(coef*255*brig, 255))
-				w.WriteByte(finalPixel)
-			}
+				finalR := byte(math.Min(colR*coef*255*brig, 255))
+				finalG := byte(math.Min(colG*coef*255*brig, 255))
+				finalB := byte(math.Min(colB*coef*255*brig, 255))
 
-			// Pad row to multiple of 4 bytes
-			for x := 0; x < padding; x++ {
-				err = w.WriteByte(0)
-				if err != nil {
-					panic(err)
-				}
+				// Bitmaps uses BGR
+				outPixel = []byte{finalB, finalG, finalR}
+
+				w.Write(outPixel)
 			}
 
 			// Decimate the columns
@@ -174,13 +182,13 @@ func writeBMPHeader(w *bufio.Writer, width, height, bitsPerPixel int) {
 	// Calculate row size and image size
 	rowSize := ((bitsPerPixel*width + 31) / 32) * 4
 	imageSize := rowSize * height
-	fileSize := 14 + 40 + 1024 + imageSize // File header + Info header + Palette + Image data
+	fileSize := 14 + 40 + imageSize // File header + Info header + Image data
 
 	// File header (14 bytes)
-	w.Write([]byte{'B', 'M'})                                // Signature
-	binary.Write(w, binary.LittleEndian, uint32(fileSize))   // File size
-	binary.Write(w, binary.LittleEndian, uint32(0))          // Reserved
-	binary.Write(w, binary.LittleEndian, uint32(14+40+1024)) // Offset to pixel data
+	w.Write([]byte{'B', 'M'})                              // Signature
+	binary.Write(w, binary.LittleEndian, uint32(fileSize)) // File size
+	binary.Write(w, binary.LittleEndian, uint32(0))        // Reserved
+	binary.Write(w, binary.LittleEndian, uint32(14+40))    // Offset to pixel data
 
 	// Image header (40 bytes)
 	binary.Write(w, binary.LittleEndian, uint32(40))           // Header size
@@ -192,16 +200,8 @@ func writeBMPHeader(w *bufio.Writer, width, height, bitsPerPixel int) {
 	binary.Write(w, binary.LittleEndian, uint32(imageSize))    // Image size
 	binary.Write(w, binary.LittleEndian, int32(2835))          // X pixels per meter (72 DPI)
 	binary.Write(w, binary.LittleEndian, int32(2835))          // Y pixels per meter (72 DPI)
-	binary.Write(w, binary.LittleEndian, uint32(256))          // Number of colors in palette
+	binary.Write(w, binary.LittleEndian, uint32(0))            // Number of colors in palette
 	binary.Write(w, binary.LittleEndian, uint32(0))            // All colors are important
-
-	// Color palette (256 * 4 = 1024 bytes)
-	for i := 0; i < 256; i++ {
-		w.WriteByte(uint8(i)) // Blue
-		w.WriteByte(uint8(i)) // Green
-		w.WriteByte(uint8(i)) // Red
-		w.WriteByte(0)        // Reserved
-	}
 }
 
 // decodeSection deprecated

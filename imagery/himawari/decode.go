@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -491,4 +492,32 @@ func (f *HMFile) updateCache() {
 		f.readCount = 0
 		f.cache = bytes.NewReader(buffer)
 	}
+}
+
+// Map to hold the band number and corresponding wavelength
+var bandToWavelength = map[int]int{
+	1:  470,
+	2:  510,
+	3:  640,
+	4:  860,
+	5:  1600,
+	6:  2300,
+	7:  3900,
+	8:  6200,
+	9:  6900,
+	10: 7300,
+	11: 8600,
+	12: 9600,
+	13: 10400,
+	14: 11200,
+	15: 12400,
+	16: 13300,
+}
+
+// GetWaveLength returns the wavelength for a given band number
+func GetWaveLength(band int) (int, error) {
+	if wavelength, found := bandToWavelength[band]; found {
+		return wavelength, nil
+	}
+	return 0, fmt.Errorf("wavelength for band number %d not found", band)
 }
