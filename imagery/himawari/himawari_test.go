@@ -150,7 +150,7 @@ type HMDecode struct {
 }
 
 func (h *HMDecode) Init() error {
-	waveLength, err := GetWaveLength(int(h.CalibrationInfo.BandNumber))
+	waveLength, err := h.GetWaveLength()
 	colR, colG, colB, err := colometry.ToRGB(waveLength)
 	if err != nil {
 		return err
@@ -202,6 +202,7 @@ func (h *HMDecode) NextPixel(pair [2]byte) (r, g, b float64, err error) {
 	}
 }
 
+// Decodes multiple bands of a section
 func decodeToFileMultiband(files []*HMDecode) error {
 	b := buffer.New(16 * 1024 * 1024)
 	r, pw := nio.Pipe(b)
@@ -234,7 +235,7 @@ func decodeToFileMultiband(files []*HMDecode) error {
 	// Write BMP header
 	writeBMPHeader(w, d.TargetWidth, d.TargetHeight, bitsPerPixel)
 
-	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.TargetWidth, d.TargetHeight, startY, endY)
+	fmt.Printf("Decoding section %d, %dx%d from y %d-%d with %d bands\n", section, d.TargetWidth, d.TargetHeight, startY, endY, len(files))
 	var pair [2]byte
 
 	for y := startY; y < endY; y++ {
@@ -267,10 +268,13 @@ func decodeToFileMultiband(files []*HMDecode) error {
 			h.DecimateLines()
 		}
 	}
+
+	fmt.Printf("Decoding of section %d done\n", section)
 	return nil
 }
 
 func decodeToFile(h *HMFile) error {
+	// 16mb
 	b := buffer.New(16 * 1024 * 1024)
 	r, pw := nio.Pipe(b)
 	w := bufio.NewWriter(pw)
@@ -305,7 +309,7 @@ func decodeToFile(h *HMFile) error {
 	fmt.Printf("Decoding section %d, %dx%d from y %d-%d\n", section, d.TargetWidth, d.TargetHeight, startY, endY)
 	var pair [2]byte
 
-	waveLength, err := GetWaveLength(int(h.CalibrationInfo.BandNumber))
+	waveLength, err := h.GetWaveLength()
 	colR, colG, colB, err := colometry.ToRGB(waveLength)
 	if err != nil {
 		return err
@@ -403,6 +407,9 @@ func decodeSection(h *HMFile, img *image.RGBA) error {
 }
 
 func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, error) {
+	// 4Mb
+	buffSize := 4 * 1024 * 1024
+
 	// Close all files
 	defer func() {
 		for _, sections := range bands {
@@ -416,7 +423,7 @@ func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, er
 	himawariFiles := make(map[int][]*HMFile)
 	for _, sections := range bands {
 		for _, s := range sections {
-			hw, err := DecodeFile(s)
+			hw, err := DecodeFile(s, buffSize)
 			if err != nil {
 				return nil, err
 			}
@@ -433,6 +440,7 @@ func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, er
 		go func(files []*HMFile) {
 			defer wg.Done()
 
+			// Create a list of files to decode and initialize metadata
 			decodes := make([]*HMDecode, len(files))
 			for i, f := range files {
 				decodes[i] = &HMDecode{HMFile: f}
@@ -453,6 +461,9 @@ func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, er
 }
 
 func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
+	// 16mb
+	buffSize := 2 * 1024 * 1024
+
 	defer func() {
 		for _, s := range sections {
 			_ = s.Close()
@@ -461,7 +472,7 @@ func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 	var img *image.RGBA
 
 	// Decode first section to gather file info
-	firstSection, err := DecodeFile(sections[0])
+	firstSection, err := DecodeFile(sections[0], buffSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode first section: %s", err)
 	}
@@ -481,7 +492,7 @@ func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
 		// Decode data
 		go func(f io.ReadSeeker) {
 			defer wg.Done()
-			h, err := DecodeFile(f)
+			h, err := DecodeFile(f, buffSize)
 			//err = decodeSection(h, d, img)
 			decodeToFile(h)
 			// TODO: err check

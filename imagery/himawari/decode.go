@@ -14,8 +14,11 @@ const (
 )
 
 type DecodeInstructions struct {
-	Decimate     int
-	TargetWidth  int
+	// Some bands have lower resolution than others, this dictates how much we should decimate when decoding
+	Decimate int
+	// Target width = OriginalWidth/Decimate
+	TargetWidth int
+	// Target height = OriginalHeight/Decimate
 	TargetHeight int
 }
 
@@ -232,7 +235,7 @@ type SpareInformationBlock struct {
 	Spare       [256]byte
 }
 
-func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
+func DecodeFile(r io.ReadSeeker, bufferSize int) (*HMFile, error) {
 	// Decode basic info
 	// uint8+uint16+uint16=5
 	basicInfo := make([]byte, 5)
@@ -441,7 +444,7 @@ func DecodeFile(r io.ReadSeeker) (*HMFile, error) {
 	}
 
 	// Create a buffered reader with a maximum buffer size of 16
-	bufferedReader := bufio.NewReaderSize(r, 16*1024*1024)
+	bufferedReader := bufio.NewReaderSize(r, bufferSize)
 	h.ImageData = bufferedReader
 
 	// Default values
@@ -495,7 +498,7 @@ func (f *HMFile) updateCache() {
 }
 
 // Map to hold the band number and corresponding wavelength
-var bandToWavelength = map[int]int{
+var bandToWavelength = map[uint16]int{
 	1:  470,
 	2:  510,
 	3:  640,
@@ -515,7 +518,8 @@ var bandToWavelength = map[int]int{
 }
 
 // GetWaveLength returns the wavelength for a given band number
-func GetWaveLength(band int) (int, error) {
+func (f *HMFile) GetWaveLength() (int, error) {
+	band := f.CalibrationInfo.BandNumber
 	if wavelength, found := bandToWavelength[band]; found {
 		return wavelength, nil
 	}

@@ -11,12 +11,14 @@ import (
 	"unicode"
 )
 
+const buffSize = 16 * 1024 * 1024
+
 func TestDecodeMetadata(t *testing.T) {
 	f, err := os.Open("test-data/HS_H09_20231031_1340_B02_FLDK_R10_S0110.DAT")
 	if err != nil {
 		t.Error(err)
 	}
-	hw, err := DecodeFile(f)
+	hw, err := DecodeFile(f, buffSize)
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,7 +221,7 @@ func TestReadPixel(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	hw, err := DecodeFile(f)
+	hw, err := DecodeFile(f, buffSize)
 	var px uint16
 	_ = hw.ReadPixel(&px)
 	if px != (hw.CalibrationInfo.CountValueOfPixelsOutsideScanArea) {
@@ -258,7 +260,7 @@ func BenchmarkHMFile_ReadPixel(b *testing.B) {
 			if err != nil {
 				b.Error(err)
 			}
-			hw, err := DecodeFile(f)
+			hw, err := DecodeFile(f, buffSize)
 			// Overwrite buffer size
 			hw.bufferSize = v.bufferSize
 			var px uint16
