@@ -44,7 +44,4 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: Ilshidur/action-discord@master
         with:
-          args: |
-            Github repo: ${{ EVENT_PAYLOAD.repository.full_name }}
-            - Branch: ${{ EVENT_PAYLOAD.ref }} }}
-            - Status: OK
+          args: 'Github repo: {{ EVENT_PAYLOAD.repository.full_name }}. Branch: {{ EVENT_PAYLOAD.ref }}. Status: OK'
