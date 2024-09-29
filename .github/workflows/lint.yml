@@ -30,10 +30,6 @@ jobs:
         with:
           version: v1.60
           args: --disable=errcheck,ineffassign,staticcheck
-  discord-notify:
-    name: Notify Discord
-    runs-on: ubuntu-latest
-    steps:
       - name: Discord notification
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
