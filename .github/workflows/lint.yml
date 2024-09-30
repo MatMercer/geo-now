@@ -1,0 +1,47 @@
+name: Go Lint
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  # pull-requests: read
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: |
+          sudo apt-get install libvips-dev
+          go install
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        uses: robherley/go-test-action@v0
+        with:
+          testArguments: -v ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          args: --disable=errcheck,ineffassign,staticcheck
+
+      - name: Discord notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: 'Github repo: {{ EVENT_PAYLOAD.repository.full_name }}. Branch: {{ EVENT_PAYLOAD.ref }}. Status: OK'

@@ -1,0 +1,35 @@
+name: Create artifact
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+
+jobs:
+  build:
+    name: create-artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: |
+          sudo apt-get install libvips-dev
+          go install
+          go build
+
+      - name: upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: geonow-amd64
+          path: geonow
+
