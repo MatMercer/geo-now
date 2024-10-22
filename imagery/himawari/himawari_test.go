@@ -25,11 +25,11 @@ import (
 
 func TestDecodeMultiBand(t *testing.T) {
 	// Profiling with pprof
-	var wg sync.WaitGroup
-	go func() {
-		fmt.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-	wg.Add(1)
+	//var wg sync.WaitGroup
+	//go func() {
+	//	fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	//}()
+	//wg.Add(1)
 
 	// B01 - 470
 	// B02 - 510
@@ -50,25 +50,69 @@ func TestDecodeMultiBand(t *testing.T) {
 		files[band] = sections
 	}
 
-	_, err := himawariDecodeMultiband(files)
+	_, himawariFiles, err := himawariDecodeMultiband(files)
 	if err != nil {
 		fmt.Printf("Failed to decode file: %s\n", err)
 		return
 	}
 
-	//fileName := src + fmt.Sprintf("_T%d", time.Now().Unix()) + ".jpg"
-	//fimg, _ := os.Create(fileName)
-	//fmt.Printf("Saving to %s...\n", fileName)
-	//err = jpeg.Encode(fimg, img, &jpeg.Options{Quality: 90})
-	//if err != nil {
-	//	panic(err)
-	//}
-	//if err = fimg.Close(); err != nil {
-	//	panic(err)
-	//}
-	//
-	//_ = exec.Command("explorer.exe", fileName).Run()
-	wg.Wait()
+	fmt.Println("Stitching the images together...")
+
+	//img, err := vips.NewImageFromFile("./images/Landscape_2.jpg")
+
+	outputName := "output.bmp"
+
+	b := buffer.New(16 * 1024 * 1024)
+	r, pw := nio.Pipe(b)
+	w := bufio.NewWriter(pw)
+	defer pw.Close()
+
+	// Open the file for writing
+	file, err := os.Create(outputName)
+	if err != nil {
+		// TODO: error handler
+		//return err
+	}
+	defer file.Close()
+
+	// Start a goroutine to write to the file
+	go func() {
+		_, _ = io.Copy(file, r)
+	}()
+
+	finalWidth := himawariFiles[0].DecodeInstructions.TargetWidth
+	sectionCount := int(himawariFiles[0].SegmentInfo.SegmentTotalNumber)
+	finalHeight := himawariFiles[0].DecodeInstructions.TargetHeight * sectionCount
+	writeBMPHeader(w, finalWidth, finalHeight, 24)
+
+	for i := 0; i < 10; i++ {
+		// Open the section file
+		sectionName := fmt.Sprintf("section_%d.bmp", i+1)
+		fmt.Printf("Opening %s...\n", sectionName)
+		sectionFile, _ := os.Open(sectionName)
+
+		// Offset to data part of bmp
+		sectionFile.Seek(0, io.SeekStart)
+		sectionFile.Seek(54, io.SeekCurrent)
+
+		// Write everything to the final file
+		written, _ := io.CopyN(w, sectionFile, 1100*11000*3)
+		w.Flush()
+
+		fmt.Printf("Written %d bytes\n", written)
+
+		sectionFile.Close()
+		//
+		//for j := 0; j < 1100*11000; j++ {
+		//	col := byte(i * 25)
+		//	pixel := []byte{col, col, col}
+		//	w.Write(pixel)
+		//}
+	}
+
+	fmt.Println("Images stitched....")
+
+	//wg.Wait()
 }
 
 func TestDecode(t *testing.T) {
@@ -259,8 +303,11 @@ func decodeToFileMultiband(files []*HMDecode) error {
 			finalG /= float64(len(files))
 			finalB /= float64(len(files))
 
+			// TODO: color correction
+			colR, colG, colB := byte(math.Min(finalG*255, 255)), byte(math.Min(finalB*255, 255)), byte(math.Min(finalR*255, 255))
+
 			// Bitmaps uses BGR
-			pixel := []byte{byte(math.Min(finalB*255, 255)), byte(math.Min(finalG*255, 255)), byte(math.Min(finalR*255, 255))}
+			pixel := []byte{colR, colG, colB}
 			w.Write(pixel)
 		}
 		// Decimate the lines
@@ -406,7 +453,7 @@ func decodeSection(h *HMFile, img *image.RGBA) error {
 	return nil
 }
 
-func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, error) {
+func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, []*HMFile, error) {
 	// 4Mb
 	buffSize := 4 * 1024 * 1024
 
@@ -419,13 +466,13 @@ func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, er
 		}
 	}()
 
-	// Map between section number and himawari file (for visible light it's 3)
+	// Map between section number and himawari file (for visible light it's 3 bands)
 	himawariFiles := make(map[int][]*HMFile)
 	for _, sections := range bands {
 		for _, s := range sections {
 			hw, err := DecodeFile(s, buffSize)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			himawariFiles[int(hw.SegmentInfo.SegmentSequenceNumber)] = append(himawariFiles[int(hw.SegmentInfo.SegmentSequenceNumber)], hw)
 		}
@@ -457,7 +504,9 @@ func himawariDecodeMultiband(bands map[int][]io.ReadSeekCloser) (*image.RGBA, er
 	wg.Wait()
 
 	fmt.Printf("Decoding done for %d sections\n", len(himawariFiles))
-	return img, nil
+
+	// FIXME: hacky stuff to get the himawari file metadata
+	return img, himawariFiles[1], nil
 }
 
 func himawariDecode(sections []io.ReadSeekCloser) (*image.RGBA, error) {
