@@ -7,6 +7,7 @@ import (
 	"github.com/djherbis/nio"
 	"matbm.net/geonow/imagery/colometry"
 	_ "net/http/pprof"
+	"time"
 )
 
 import (
@@ -62,23 +63,14 @@ func TestDecodeMultiBand(t *testing.T) {
 
 	outputName := "output.bmp"
 
-	b := buffer.New(16 * 1024 * 1024)
-	r, pw := nio.Pipe(b)
-	w := bufio.NewWriter(pw)
-	defer pw.Close()
-
 	// Open the file for writing
 	file, err := os.Create(outputName)
+	w := bufio.NewWriter(file)
 	if err != nil {
 		// TODO: error handler
 		//return err
 	}
 	defer file.Close()
-
-	// Start a goroutine to write to the file
-	go func() {
-		_, _ = io.Copy(file, r)
-	}()
 
 	finalWidth := himawariFiles[0].DecodeInstructions.TargetWidth
 	sectionCount := int(himawariFiles[0].SegmentInfo.SegmentTotalNumber)
@@ -96,11 +88,22 @@ func TestDecodeMultiBand(t *testing.T) {
 		sectionFile.Seek(54, io.SeekCurrent)
 
 		// Write everything to the final file
-		written, _ := io.CopyN(w, sectionFile, 1100*11000*3)
+		expectedSize := int64(1100 * 11000 * 3)
+		written, err := io.CopyN(w, sectionFile, expectedSize)
 		w.Flush()
+
+		if err != nil {
+			print("ERROR: ", err.Error())
+		}
 
 		fmt.Printf("Written %d bytes\n", written)
 
+		// FIXME: solve wrong image sizes
+		//fmt.Printf("%d\n", (expectedSize-written)/3)
+		//for j := int64(0); j <= (expectedSize-written)/3; j++ {
+		//	pixel := []byte{255, 0, 0}
+		//	w.Write(pixel)
+		//}
 		sectionFile.Close()
 		//
 		//for j := 0; j < 1100*11000; j++ {
@@ -316,7 +319,11 @@ func decodeToFileMultiband(files []*HMDecode) error {
 		}
 	}
 
-	fmt.Printf("Decoding of section %d done\n", section)
+	// FIXME: racing condition, goroutine stops before writing all
+	w.Flush()
+	time.Sleep(1 * time.Second)
+
+	fmt.Printf("Decoding of section multiband %d done\n", section)
 	return nil
 }
 
