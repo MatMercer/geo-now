@@ -194,6 +194,12 @@ func TestDecodeMetadata(t *testing.T) {
 			BlockLength: 259,
 			Spare:       [256]byte{},
 		},
+		// TODO: add a test when it must decimate half if it outputs 22000 width and height (decimate = 2)
+		DecodeInstructions: DecodeInstructions{
+			Decimate:     1,
+			TargetWidth:  11000,
+			TargetHeight: 1100,
+		},
 	},
 		hw,
 		cmp.FilterPath(func(p cmp.Path) bool {

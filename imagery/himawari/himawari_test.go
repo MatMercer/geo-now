@@ -42,7 +42,7 @@ func getSha1String(file string) (string, error) {
 }
 
 func TestDecodeMultiBand(t *testing.T) {
-	expectedSum, err := getSha1String("expected_output.bmp")
+	expectedSum, err := getSha1String("test-data/expected_output.bmp")
 	if err != nil {
 		t.Fatalf("Failed to calculate expected sum: %s", err)
 	}
