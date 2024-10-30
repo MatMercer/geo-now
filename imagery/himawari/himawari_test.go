@@ -7,7 +7,6 @@ import (
 	"github.com/djherbis/nio"
 	"matbm.net/geonow/imagery/colometry"
 	_ "net/http/pprof"
-	"time"
 )
 
 import (
@@ -251,10 +250,13 @@ func (h *HMDecode) NextPixel(pair [2]byte) (r, g, b float64, err error) {
 
 // Decodes multiple bands of a section
 func decodeToFileMultiband(files []*HMDecode) error {
+	// Used to wait for all writes
+	copyFinished := make(chan bool, 1)
+
+	// 16 Mb
 	b := buffer.New(16 * 1024 * 1024)
 	r, pw := nio.Pipe(b)
 	w := bufio.NewWriter(pw)
-	defer pw.Close()
 
 	// Open the file for writing
 	file, err := os.Create(fmt.Sprintf("section_%d.bmp", files[0].SegmentInfo.SegmentSequenceNumber))
@@ -263,9 +265,11 @@ func decodeToFileMultiband(files []*HMDecode) error {
 	}
 	defer file.Close()
 
-	// Start a goroutine to write to the file
+	// Start a goroutine to write to the file asynchronously, we don't wait for writes
 	go func() {
 		_, _ = io.Copy(file, r)
+		// Signal that we finished copying everything
+		copyFinished <- true
 	}()
 
 	// Get the decode info
@@ -310,8 +314,11 @@ func decodeToFileMultiband(files []*HMDecode) error {
 			colR, colG, colB := byte(math.Min(finalG*255, 255)), byte(math.Min(finalB*255, 255)), byte(math.Min(finalR*255, 255))
 
 			// Bitmaps uses BGR
-			pixel := []byte{colR, colG, colB}
-			w.Write(pixel)
+			pixel := []byte{colB, colG, colR}
+			_, err = w.Write(pixel)
+			if err != nil {
+				return err
+			}
 		}
 		// Decimate the lines
 		for _, h := range files {
@@ -319,9 +326,16 @@ func decodeToFileMultiband(files []*HMDecode) error {
 		}
 	}
 
-	// FIXME: racing condition, goroutine stops before writing all
-	w.Flush()
-	time.Sleep(1 * time.Second)
+	// Flush all the writes and wait for the write end
+	err = w.Flush()
+	if err != nil {
+		return err
+	}
+	err = pw.Close()
+	if err != nil {
+		return err
+	}
+	<-copyFinished
 
 	fmt.Printf("Decoding of section multiband %d done\n", section)
 	return nil
