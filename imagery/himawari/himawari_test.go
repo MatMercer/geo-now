@@ -311,7 +311,7 @@ func decodeToFileMultiband(files []*HMDecode) error {
 			finalB /= float64(len(files))
 
 			// TODO: color correction
-			colR, colG, colB := byte(math.Min(finalG*255, 255)), byte(math.Min(finalB*255, 255)), byte(math.Min(finalR*255, 255))
+			colR, colG, colB := byte(math.Min(finalR*255, 255)), byte(math.Min(finalG*255, 255)), byte(math.Min(finalB*255, 255))
 
 			// Bitmaps uses BGR
 			pixel := []byte{colB, colG, colR}
