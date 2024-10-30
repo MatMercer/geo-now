@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha1"
 	"encoding/binary"
+	"encoding/hex"
 	"github.com/djherbis/buffer"
 	"github.com/djherbis/nio"
+	"log"
 	"matbm.net/geonow/imagery/colometry"
 	_ "net/http/pprof"
 )
@@ -23,7 +26,27 @@ import (
 	"testing"
 )
 
+func getSha1String(file string) (string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	h := sha1.New()
+	if _, err := io.Copy(h, f); err != nil {
+		log.Fatal(err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 func TestDecodeMultiBand(t *testing.T) {
+	expectedSum, err := getSha1String("expected_output.bmp")
+	if err != nil {
+		t.Fatalf("Failed to calculate expected sum: %s", err)
+	}
+
 	// Profiling with pprof
 	//var wg sync.WaitGroup
 	//go func() {
@@ -57,8 +80,6 @@ func TestDecodeMultiBand(t *testing.T) {
 	}
 
 	fmt.Println("Stitching the images together...")
-
-	//img, err := vips.NewImageFromFile("./images/Landscape_2.jpg")
 
 	outputName := "output.bmp"
 
@@ -113,6 +134,15 @@ func TestDecodeMultiBand(t *testing.T) {
 	}
 
 	fmt.Println("Images stitched....")
+
+	finalSum, err := getSha1String("output.bmp")
+	if err != nil {
+		t.Fatalf("Failed to calculate output sum: %s", err)
+	}
+
+	if finalSum != expectedSum {
+		t.Fatalf("Final sum does not match expected sum: '%s' != '%s'", finalSum, expectedSum)
+	}
 
 	//wg.Wait()
 }
