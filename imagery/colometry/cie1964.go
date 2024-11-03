@@ -39,20 +39,20 @@ const NoResponse = -77
 var matchingFunctions = map[int]MatchingFunction{
 	470: {
 		Wavelength: 470,
-		X:          0.195618,
-		Y:          0.185190,
-		Z:          1.31756,
+		X:          0.11518,
+		Y:          0.10904,
+		Z:          0.77578,
 	},
 	510: {
 		Wavelength: 510,
-		X:          0.037465,
-		Y:          0.606741,
-		Z:          0.112044,
+		X:          0.049540,
+		Y:          0.802300,
+		Z:          0.148160,
 	},
 	640: {
 		Wavelength: 640,
-		X:          0.431567,
-		Y:          0.179828,
+		X:          0.705870,
+		Y:          0.294130,
 		Z:          0.0, // TODO: is it 0 or a different no response?
 	},
 }
