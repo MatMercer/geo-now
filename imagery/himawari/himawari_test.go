@@ -223,6 +223,9 @@ type HMDecode struct {
 	colR float64
 	colG float64
 	colB float64
+	colX float64
+	colY float64
+	colZ float64
 }
 
 func (h *HMDecode) Init() error {
@@ -235,6 +238,15 @@ func (h *HMDecode) Init() error {
 	h.colR = colR
 	h.colG = colG
 	h.colB = colB
+
+	matchFunction, err := colometry.GetMatchingFunction(waveLength)
+	if err != nil {
+		return err
+	}
+
+	h.colX = matchFunction.X
+	h.colY = matchFunction.Y
+	h.colZ = matchFunction.Z
 
 	return nil
 }
@@ -250,6 +262,26 @@ func (h *HMDecode) DecimateLines() {
 	// Decimate the lines
 	for i := 0; i < h.DecodeInstructions.Decimate-1; i++ {
 		io.CopyN(io.Discard, h.ImageData, int64(2*h.DataInfo.NumberOfColumns))
+	}
+}
+
+func (h *HMDecode) NextCoef(pair [2]byte) (c float64, err error) {
+	_, err = h.ImageData.Read(pair[:])
+	if err != nil {
+		return -1., err
+	}
+	// TODO check endianess
+	p := uint16(pair[0]) | uint16(pair[1])<<8
+
+	// Do err and outside scan area logic
+	if p == h.CalibrationInfo.CountValueOfPixelsOutsideScanArea || p == h.CalibrationInfo.CountValueOfErrorPixels {
+		return 0., nil
+	} else {
+		// Get a number between 0 and 1 from max number of pixels
+		// Different bands has different number of pixels bits, e.g., band 03 has 11
+		coef := float64(p) / (math.Pow(2., float64(h.CalibrationInfo.ValidNumberOfBitsPerPixel)) - 2.)
+
+		return coef, nil
 	}
 }
 
@@ -273,7 +305,6 @@ func (h *HMDecode) NextPixel(pair [2]byte) (r, g, b float64, err error) {
 		finalG := h.colG * coef * brig
 		finalB := h.colB * coef * brig
 
-		// Bitmaps uses BGR
 		return finalR, finalG, finalB, nil
 	}
 }
@@ -322,23 +353,27 @@ func decodeToFileMultiband(files []*HMDecode) error {
 	for y := startY; y < endY; y++ {
 		for x := 0; x < d.TargetWidth; x++ {
 			var finalR, finalG, finalB float64
+			var finalX, finalY, finalZ float64
 			for _, h := range files {
-				r, g, b, err := h.NextPixel(pair)
+				//r, g, b, err := h.NextPixel(pair)
+				coef, err := h.NextCoef(pair)
 				if err != nil {
 					return err
 				}
 
-				finalR += r
-				finalG += g
-				finalB += b
+				finalX += h.colX * coef
+				finalY += h.colY * coef
+				finalZ += h.colZ * coef
 
 				// Decimate the columns
 				h.DecimateCols(pair)
 			}
 
-			finalR /= float64(len(files))
-			finalG /= float64(len(files))
-			finalB /= float64(len(files))
+			//finalX /= float64(len(files))
+			//finalY /= float64(len(files))
+			//finalZ /= float64(len(files))
+
+			finalR, finalG, finalB = colometry.XYZTosRGB(finalX, finalY, finalZ)
 
 			// TODO: color correction
 			colR, colG, colB := byte(math.Min(finalR*255, 255)), byte(math.Min(finalG*255, 255)), byte(math.Min(finalB*255, 255))
